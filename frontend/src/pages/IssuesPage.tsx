@@ -3,9 +3,11 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
+import { FilterBar } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { RepositoryCombobox } from '@/components/RepositoryCombobox'
+import { SearchField } from '@/components/SearchField'
 import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { IssueStateBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
@@ -73,48 +75,37 @@ export function IssuesPage() {
 
   return (
     <div>
-      <PageHeader
-        title={t('issues.title')}
-        description={t('issues.description')}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <RefreshButton onClick={issues.refresh} loading={issues.loading} />
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">{t('filter.search')}</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('filter.searchPlaceholder')}
-                className="w-48 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">{t('issues.filterRepository')}</span>
-              <RepositoryCombobox
-                repositories={repositories.data?.items ?? []}
-                value={repository}
-                onChange={setRepository}
-              />
-            </label>
+      <PageHeader title={t('issues.title')} description={t('issues.description')} />
 
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">{t('issues.filterState')}</span>
-              <select
-                value={state}
-                onChange={(event) => setState(event.target.value as StateFilter)}
-                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-              >
-                {stateOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {t(option.labelKey)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        }
-      />
+      <FilterBar>
+        <SearchField
+          label={t('filter.search')}
+          placeholder={t('filter.searchPlaceholder')}
+          value={query}
+          onChange={setQuery}
+        />
+        <RepositoryCombobox
+          label={t('issues.filterRepository')}
+          repositories={repositories.data?.items ?? []}
+          value={repository}
+          onChange={setRepository}
+        />
+        <select
+          aria-label={t('issues.filterState')}
+          value={state}
+          onChange={(event) => setState(event.target.value as StateFilter)}
+          className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+        >
+          {stateOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {t(option.labelKey)}
+            </option>
+          ))}
+        </select>
+        <div className="ml-auto">
+          <RefreshButton onClick={issues.refresh} loading={issues.loading} />
+        </div>
+      </FilterBar>
 
       <p aria-live="polite" className="sr-only">
         {announcement}

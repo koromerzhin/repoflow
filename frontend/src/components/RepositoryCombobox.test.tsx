@@ -35,7 +35,14 @@ const repositories: Repository[] = [
 ]
 
 function renderCombobox(onChange: (value: string) => void = () => undefined, value = '') {
-  render(<RepositoryCombobox repositories={repositories} value={value} onChange={onChange} />)
+  render(
+    <RepositoryCombobox
+      repositories={repositories}
+      value={value}
+      onChange={onChange}
+      label="Dépôt"
+    />,
+  )
   return screen.getByRole('combobox')
 }
 

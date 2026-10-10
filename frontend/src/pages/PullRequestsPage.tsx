@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
+import { FilterBar } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { RepositoryCombobox } from '@/components/RepositoryCombobox'
+import { SearchField } from '@/components/SearchField'
 import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
@@ -59,33 +61,25 @@ export function PullRequestsPage() {
 
   return (
     <div>
-      <PageHeader
-        title={t('pr.title')}
-        description={t('pr.description')}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">{t('filter.search')}</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('filter.searchPlaceholder')}
-                className="w-48 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-              />
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">{t('pr.filterRepository')}</span>
-              <RepositoryCombobox
-                repositories={repositories.data?.items ?? []}
-                value={repository}
-                onChange={setRepository}
-              />
-            </label>
-          </div>
-        }
-      />
+      <PageHeader title={t('pr.title')} description={t('pr.description')} />
+
+      <FilterBar>
+        <SearchField
+          label={t('filter.search')}
+          placeholder={t('filter.searchPlaceholder')}
+          value={query}
+          onChange={setQuery}
+        />
+        <RepositoryCombobox
+          label={t('pr.filterRepository')}
+          repositories={repositories.data?.items ?? []}
+          value={repository}
+          onChange={setRepository}
+        />
+        <div className="ml-auto">
+          <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
+        </div>
+      </FilterBar>
 
       <p aria-live="polite" className="sr-only">
         {announcement}

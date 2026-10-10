@@ -16,12 +16,14 @@ interface RepositoryComboboxProps {
   repositories: Repository[]
   value: string
   onChange: (value: string) => void
+  label: string
 }
 
 export function RepositoryCombobox({
   repositories,
   value,
   onChange,
+  label,
 }: RepositoryComboboxProps) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
@@ -112,6 +114,7 @@ export function RepositoryCombobox({
           type="text"
           role="combobox"
           autoComplete="off"
+          aria-label={label}
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
           aria-autocomplete="list"
