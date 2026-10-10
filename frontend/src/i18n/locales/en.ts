@@ -25,6 +25,7 @@ export const en = {
     apiOperational: 'API operational',
     apiDegraded: 'API degraded',
     killSwitchActive: 'Emergency stop active',
+    githubQuota: 'GitHub quota: {{remaining}} requests left',
     demoBanner:
       'Demo mode: all displayed data is fictional and does not come from GitHub.',
     openMenu: 'Open menu',
@@ -41,6 +42,10 @@ export const en = {
     noResult: 'No matching repository.',
     listLabel: 'Repositories',
     clear: 'Clear selected repository',
+    autoRefresh: 'Automatic refresh',
+    autoOff: 'Manual',
+    auto30s: 'Auto 30 s',
+    auto60s: 'Auto 1 min',
   },
   status: {
     check: {

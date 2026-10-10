@@ -62,6 +62,35 @@ describe('AppLayout', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 
+  it('affiche un avertissement quand le quota GitHub est bas', async () => {
+    vi.mocked(getHealth).mockResolvedValue(
+      health({
+        data_source: 'github',
+        github_rate_limit: { remaining: 42, limit: 5000, reset_at: '2026-01-01T11:00:00Z' },
+      }),
+    )
+
+    renderLayout()
+
+    await waitFor(() =>
+      expect(screen.getByText('Quota GitHub : 42 requêtes restantes')).toBeInTheDocument(),
+    )
+  })
+
+  it('ne signale rien quand le quota GitHub est confortable', async () => {
+    vi.mocked(getHealth).mockResolvedValue(
+      health({
+        data_source: 'github',
+        github_rate_limit: { remaining: 4123, limit: 5000, reset_at: '2026-01-01T11:00:00Z' },
+      }),
+    )
+
+    renderLayout()
+
+    await waitFor(() => expect(screen.getByText('API opérationnelle')).toBeInTheDocument())
+    expect(screen.queryByText(/Quota GitHub/)).not.toBeInTheDocument()
+  })
+
   it('ouvre et ferme le menu latéral sur petit écran', async () => {
     const user = userEvent.setup()
     vi.mocked(getHealth).mockResolvedValue(health())

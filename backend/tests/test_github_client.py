@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.core.errors import NotFoundError, ProviderError
+from app.integrations.github import ratelimit
 from app.integrations.github.client import GitHubClient, parse_next_link
 from app.integrations.github.errors import (
     GitHubAuthError,
@@ -331,3 +332,44 @@ async def test_rate_limit_primaire_sans_retry_after_n_eessaie_pas() -> None:
         await client.aclose()
 
     assert len(calls) == 1
+
+
+async def test_quota_enregistre_apres_reponse() -> None:
+    ratelimit.reset()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"ok": True},
+            headers={
+                "x-ratelimit-remaining": "4998",
+                "x-ratelimit-limit": "5000",
+                "x-ratelimit-reset": "1700000000",
+            },
+        )
+
+    client = make_client(handler)
+    try:
+        await client.get("/user")
+        snapshot = ratelimit.snapshot()
+    finally:
+        await client.aclose()
+        ratelimit.reset()
+
+    assert snapshot == {"remaining": 4998, "limit": 5000, "reset_at": 1700000000}
+
+
+async def test_quota_non_renseigne_sans_entetes() -> None:
+    ratelimit.reset()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True})
+
+    client = make_client(handler)
+    try:
+        await client.get("/user")
+        snapshot = ratelimit.snapshot()
+    finally:
+        await client.aclose()
+
+    assert snapshot == {"remaining": None, "limit": None, "reset_at": None}

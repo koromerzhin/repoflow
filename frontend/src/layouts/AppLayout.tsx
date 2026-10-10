@@ -1,13 +1,16 @@
-import { CircleAlert, Menu, ShieldCheck, ShieldX, X } from 'lucide-react'
+import { CircleAlert, Gauge, Menu, ShieldCheck, ShieldX } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { Badge } from '@/components/Badge'
+import { Drawer } from '@/components/Drawer'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { Sidebar } from '@/components/Sidebar'
 import { useAsync } from '@/hooks/useAsync'
 import { getHealth } from '@/services/apiClient'
+
+const GITHUB_QUOTA_LOW_THRESHOLD = 100
 
 export function AppLayout() {
   const { t } = useTranslation()
@@ -31,29 +34,13 @@ export function AppLayout() {
         <Sidebar />
       </aside>
 
-      {sidebarOpen ? (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <button
-            type="button"
-            aria-label={t('app.closeMenu')}
-            className="absolute inset-0 bg-slate-950/70"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <div className="absolute inset-y-0 left-0 w-64 border-r border-slate-800 bg-slate-950">
-            <div className="flex justify-end p-2">
-              <button
-                type="button"
-                aria-label={t('app.closeMenu')}
-                onClick={() => setSidebarOpen(false)}
-                className="rounded-md p-2 text-slate-400 hover:bg-slate-900 hover:text-slate-100"
-              >
-                <X className="size-5" aria-hidden />
-              </button>
-            </div>
-            <Sidebar onNavigate={() => setSidebarOpen(false)} />
-          </div>
-        </div>
-      ) : null}
+      <Drawer
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        label={t('nav.main')}
+      >
+        <Sidebar onNavigate={() => setSidebarOpen(false)} />
+      </Drawer>
 
       <div className="md:pl-60">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/85 px-4 py-3 backdrop-blur">
@@ -91,6 +78,13 @@ export function AppLayout() {
               <Badge className="bg-red-500/15 text-red-300 ring-red-500/30">
                 <CircleAlert className="size-3.5" aria-hidden />
                 {t('app.killSwitchActive')}
+              </Badge>
+            ) : null}
+            {health?.github_rate_limit?.remaining != null &&
+            health.github_rate_limit.remaining <= GITHUB_QUOTA_LOW_THRESHOLD ? (
+              <Badge className="bg-amber-500/15 text-amber-300 ring-amber-500/30">
+                <Gauge className="size-3.5" aria-hidden />
+                {t('app.githubQuota', { remaining: health.github_rate_limit.remaining })}
               </Badge>
             ) : null}
             <LanguageSwitcher />

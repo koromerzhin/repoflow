@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { PullRequestsPage } from '@/pages/PullRequestsPage'
@@ -11,6 +11,11 @@ vi.mock('@/services/apiClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/apiClient')>()
   return { ...actual, getPullRequests: vi.fn(), getRepositories: vi.fn() }
 })
+
+function LocationProbe() {
+  const { search } = useLocation()
+  return <span data-testid="location">{search}</span>
+}
 
 const repositories: RepositoryListResponse = {
   items: [
@@ -147,6 +152,7 @@ function renderPage() {
   return render(
     <MemoryRouter>
       <PullRequestsPage />
+      <LocationProbe />
     </MemoryRouter>,
   )
 }
@@ -205,7 +211,7 @@ describe('PullRequestsPage', () => {
       expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('combobox', { name: 'Dépôt' }))
     await user.click(await screen.findByRole('option', { name: /acme\/web-app/ }))
 
     await waitFor(() =>
@@ -246,6 +252,31 @@ describe('PullRequestsPage', () => {
     )
     expect(screen.getAllByText('Privé').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Public').length).toBeGreaterThan(0)
+  })
+
+  it('persiste la recherche et le dépôt dans l’URL', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('q=facturation'),
+    )
+
+    await user.click(screen.getByRole('combobox', { name: 'Dépôt' }))
+    await user.click(await screen.findByRole('option', { name: /acme\/web-app/ }))
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        'q=facturation&repository=acme%2Fweb-app',
+      ),
+    )
   })
 
   it('affiche un état vide', async () => {

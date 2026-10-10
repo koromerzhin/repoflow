@@ -30,6 +30,11 @@ export interface HealthResponse {
   data_source: DataSource
   database: 'ok' | 'unavailable' | 'not_checked'
   kill_switch_engaged: boolean
+  github_rate_limit?: {
+    remaining: number | null
+    limit: number | null
+    reset_at: string | null
+  } | null
 }
 
 export interface DashboardCounters {

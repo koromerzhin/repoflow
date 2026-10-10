@@ -25,6 +25,7 @@ export const fr = {
     apiOperational: 'API opérationnelle',
     apiDegraded: 'API dégradée',
     killSwitchActive: 'Arrêt d\'urgence actif',
+    githubQuota: 'Quota GitHub : {{remaining}} requêtes restantes',
     demoBanner:
       'Mode démonstration : toutes les données affichées sont fictives et ne proviennent pas de GitHub.',
     openMenu: 'Ouvrir le menu',
@@ -41,6 +42,10 @@ export const fr = {
     noResult: 'Aucun dépôt correspondant.',
     listLabel: 'Dépôts',
     clear: 'Effacer le dépôt sélectionné',
+    autoRefresh: 'Rafraîchissement automatique',
+    autoOff: 'Manuel',
+    auto30s: 'Auto 30 s',
+    auto60s: 'Auto 1 min',
   },
   status: {
     check: {

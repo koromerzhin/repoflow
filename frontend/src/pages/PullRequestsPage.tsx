@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
+import { AutoRefreshSelect } from '@/components/AutoRefreshSelect'
 import { Badge } from '@/components/Badge'
 import { FilterBar } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
@@ -10,6 +11,8 @@ import { RefreshButton } from '@/components/RefreshButton'
 import { RepositoryCombobox } from '@/components/RepositoryCombobox'
 import { SearchField } from '@/components/SearchField'
 import { VisibilityBadge } from '@/components/VisibilityBadge'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useUrlState } from '@/hooks/useUrlState'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { matchesQuery } from '@/lib/search'
@@ -17,8 +20,9 @@ import { getPullRequests, getRepositories } from '@/services/apiClient'
 
 export function PullRequestsPage() {
   const { t } = useTranslation()
-  const [repository, setRepository] = useState('')
-  const [query, setQuery] = useState('')
+  const [repository, setRepository] = useUrlState('repository', '')
+  const [query, setQuery] = useUrlState('q', '')
+  const [autoSeconds, setAutoSeconds] = useState(0)
 
   const repositories = useAsync(getRepositories, [])
   const pullRequests = useResource(
@@ -29,6 +33,7 @@ export function PullRequestsPage() {
       ),
     [repository],
   )
+  useAutoRefresh(pullRequests.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
   const filteredItems = useMemo(() => {
     const items = pullRequests.data?.items ?? []
@@ -76,7 +81,8 @@ export function PullRequestsPage() {
           value={repository}
           onChange={setRepository}
         />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
           <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
         </div>
       </FilterBar>

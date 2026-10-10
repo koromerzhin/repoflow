@@ -6,22 +6,27 @@ import {
   GitPullRequest,
   XCircle,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
+import { AutoRefreshSelect } from '@/components/AutoRefreshSelect'
 import { CounterCard } from '@/components/CounterCard'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useResource } from '@/hooks/useAsync'
 import { formatDateTime } from '@/lib/status'
 import { getDashboard } from '@/services/apiClient'
 
 export function DashboardPage() {
   const { t } = useTranslation()
+  const [autoSeconds, setAutoSeconds] = useState(0)
   const { data, error, loading, reload, refresh } = useResource(
     (options, signal) => getDashboard(signal, { refresh: options.refresh }),
     [],
   )
+  useAutoRefresh(refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
   const counters = data?.counters
 
   return (
@@ -29,7 +34,12 @@ export function DashboardPage() {
       <PageHeader
         title={t('dashboard.title')}
         description={t('dashboard.description')}
-        actions={<RefreshButton onClick={refresh} loading={loading} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
+            <RefreshButton onClick={refresh} loading={loading} />
+          </div>
+        }
       />
 
       <AsyncState loading={loading} error={error} onRetry={reload}>

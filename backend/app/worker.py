@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import asyncio
 
+from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.db.init_db import create_all
 from app.db.session import get_session_factory
 from app.integrations.github.factory import get_provider
+from app.services import audit_service
 from app.services.analysis_service import run_analysis
 
 logger = get_logger(__name__)
@@ -39,8 +42,19 @@ async def run_once() -> None:
             summary.pull_requests,
             summary.merged,
         )
+        _purge_audit(session, settings.audit_retention_days)
     finally:
         session.close()
+
+
+def _purge_audit(session: Session, retention_days: int) -> None:
+    """Applique la rétention du journal d'audit (aucun effet si 0)."""
+    if retention_days <= 0:
+        return
+    purged = audit_service.purge_expired(session, retention_days)
+    if purged:
+        session.commit()
+        logger.info("Rétention d'audit : %s entrée(s) supprimée(s).", purged)
 
 
 async def run_forever(interval_seconds: int | None = None) -> None:

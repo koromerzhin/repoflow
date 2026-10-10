@@ -9,7 +9,13 @@ from sqlalchemy import text
 
 from app.api.deps import ProviderDep, SettingsDep
 from app.db.session import get_engine
-from app.schemas.health import DatabaseStatus, HealthResponse, HealthStatus
+from app.integrations.github import ratelimit
+from app.schemas.health import (
+    DatabaseStatus,
+    GitHubRateLimitStatus,
+    HealthResponse,
+    HealthStatus,
+)
 
 router = APIRouter()
 
@@ -21,6 +27,18 @@ def _database_status() -> DatabaseStatus:
     except Exception:
         return DatabaseStatus.UNAVAILABLE
     return DatabaseStatus.OK
+
+
+def _github_rate_limit_status(provider_name: str) -> GitHubRateLimitStatus | None:
+    if provider_name != "github":
+        return None
+    observed = ratelimit.snapshot()
+    reset_epoch = observed["reset_at"]
+    return GitHubRateLimitStatus(
+        remaining=observed["remaining"],
+        limit=observed["limit"],
+        reset_at=(datetime.fromtimestamp(reset_epoch, tz=UTC) if reset_epoch is not None else None),
+    )
 
 
 @router.get("/health", response_model=HealthResponse, tags=["health"])
@@ -37,4 +55,5 @@ async def health(settings: SettingsDep, provider: ProviderDep) -> HealthResponse
         data_source=provider.name,
         database=db_status,
         kill_switch_engaged=settings.kill_switch_engaged,
+        github_rate_limit=_github_rate_limit_status(provider.name),
     )

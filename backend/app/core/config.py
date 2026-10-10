@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     worker_enabled: bool = False
     worker_interval_seconds: int = Field(default=300, ge=1)
 
+    # Rétention du journal d'audit, en jours (0 = illimitée).
+    # La purge s'exécute à chaque passe du worker.
+    audit_retention_days: int = Field(default=0, ge=0)
+
     # Observabilité.
     # Identifiant de corrélation et journal d'accès : toujours actifs.
     # Exposition des métriques (``/api/metrics``).

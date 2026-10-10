@@ -57,13 +57,21 @@ Pour brancher des vraies données GitHub, éditer `.env` :
   éligibles en `squash` lorsque l'automatisation est explicitement autorisée.
 - État des automatisations et arrêt d'urgence global
   (`GET /api/v1/automation/status`, `POST /api/v1/automation/kill-switch`).
-- Journal d'audit persistant consultable (`GET /api/v1/audit`) : analyses,
-  décisions, fusions réussies ou bloquées.
+- Journal d'audit persistant consultable (`GET /api/v1/audit`, pagination par
+  curseur `before_id`) : analyses, décisions, fusions réussies ou bloquées ;
+  rétention configurable (`REPOFLOW_AUDIT_RETENTION_DAYS`, purge par le
+  worker).
+- Suivi du quota GitHub : dernier état `X-RateLimit-*` observé exposé par
+  `GET /api/health` (`github_rate_limit`) et badge d'avertissement dans
+  l'interface quand le quota restant est bas.
 - Interface React sombre, **bilingue français / anglais** (détection du
   navigateur, bascule manuelle persistée, `?lang=en`), responsive :
   navigation, tableau de bord, dépôts, pull requests, détail de PR, issues,
   automatisations, historique, états de chargement / erreur / vide. Les
-  messages d'erreur de l'API suivent l'en-tête `Accept-Language`.
+  messages d'erreur de l'API suivent l'en-tête `Accept-Language`. Filtres
+  persistés dans l'URL, rafraîchissement automatique optionnel, moteur de
+  recherche insensible à la casse et aux accents, combobox de dépôts
+  accessible au clavier.
 - Fournisseur de données abstrait (`demo` / `github`).
 - Connexion GitHub réelle (dépôts, PR, checks CI, revues) avec pagination,
   requêtes conditionnelles (ETag), chargements coalescés, gestion du rate

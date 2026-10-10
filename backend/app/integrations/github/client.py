@@ -23,6 +23,7 @@ import httpx
 
 from app.core.errors import NotFoundError, ProviderError
 from app.core.logging import get_logger
+from app.integrations.github import ratelimit
 from app.integrations.github.errors import (
     GitHubAuthError,
     GitHubPermissionError,
@@ -146,6 +147,20 @@ class GitHubClient:
             return None
         return min(float(raw), self._max_retry_after)
 
+    @staticmethod
+    def _record_rate_limit(response: httpx.Response) -> None:
+        """Met à jour l'instantané de quota exposé par la route de santé."""
+        remaining = response.headers.get("x-ratelimit-remaining")
+        if remaining is None or not remaining.isdigit():
+            return
+        limit = response.headers.get("x-ratelimit-limit")
+        reset_raw = response.headers.get("x-ratelimit-reset")
+        ratelimit.update(
+            remaining=int(remaining),
+            limit=int(limit) if limit and limit.isdigit() else None,
+            reset_at=int(reset_raw) if reset_raw and reset_raw.isdigit() else None,
+        )
+
     def _cache_key(self, path: str, params: dict[str, Any] | None) -> str:
         if not params:
             return path
@@ -184,6 +199,7 @@ class GitHubClient:
         response = await self._client.request(
             method, path, params=params, json=json, headers=headers
         )
+        self._record_rate_limit(response)
         delay = self._retry_after_seconds(response)
         if response.status_code in (403, 429) and delay is not None:
             logger.info("Limite secondaire GitHub ; nouvelle tentative dans %.1fs.", delay)

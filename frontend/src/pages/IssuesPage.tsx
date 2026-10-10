@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
+import { AutoRefreshSelect } from '@/components/AutoRefreshSelect'
 import { FilterBar } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
@@ -11,6 +12,8 @@ import { SearchField } from '@/components/SearchField'
 import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { IssueStateBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useUrlState } from '@/hooks/useUrlState'
 import { formatDateTime } from '@/lib/status'
 import { matchesQuery } from '@/lib/search'
 import { getIssues, getRepositories } from '@/services/apiClient'
@@ -26,9 +29,13 @@ const stateOptions: { value: StateFilter; labelKey: string }[] = [
 
 export function IssuesPage() {
   const { t } = useTranslation()
-  const [repository, setRepository] = useState('')
-  const [state, setState] = useState<StateFilter>('open')
-  const [query, setQuery] = useState('')
+  const [repository, setRepository] = useUrlState('repository', '')
+  const [stateParam, setStateParam] = useUrlState('state', 'open')
+  const [query, setQuery] = useUrlState('q', '')
+  const [autoSeconds, setAutoSeconds] = useState(0)
+  const state: StateFilter = (stateOptions.some((option) => option.value === stateParam)
+    ? stateParam
+    : 'open') as StateFilter
 
   const repositories = useAsync(getRepositories, [])
   const issues = useResource(
@@ -43,6 +50,7 @@ export function IssuesPage() {
       ),
     [repository, state],
   )
+  useAutoRefresh(issues.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
   const filteredItems = useMemo(() => {
     const items = issues.data?.items ?? []
@@ -93,7 +101,7 @@ export function IssuesPage() {
         <select
           aria-label={t('issues.filterState')}
           value={state}
-          onChange={(event) => setState(event.target.value as StateFilter)}
+          onChange={(event) => setStateParam(event.target.value)}
           className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
         >
           {stateOptions.map((option) => (
@@ -102,7 +110,8 @@ export function IssuesPage() {
             </option>
           ))}
         </select>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
           <RefreshButton onClick={issues.refresh} loading={issues.loading} />
         </div>
       </FilterBar>
