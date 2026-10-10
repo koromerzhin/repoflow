@@ -53,10 +53,12 @@ Côté frontend :
 ## Règles de code
 
 - **Backend** : Python typé (`from __future__ import annotations`), Ruff comme
-  source de vérité (lint + format). Pas de commentaire superflu.
+  source de vérité (lint + format). Pas de commentaire superflu. Messages API
+  localisés fr/en via `Accept-Language` (module `app/i18n.py`).
 - **Frontend** : TypeScript `strict`, imports via l'alias `@/`, composants
-  fonctionnels. Interface en **français**. Ne pas utiliser de commentaires
-  inutiles.
+  fonctionnels. Interface bilingue via `src/i18n/` (locales `fr` et `en`) —
+  tout libellé passe par une clé de traduction, jamais de chaîne codée en
+  dur. Ne pas utiliser de commentaires inutiles.
 - Les réponses d'API sont typées par des schémas Pydantic explicites.
 - Les données de démonstration doivent toujours être identifiables
   (`is_demo: true`, `data_source: "demo"`).

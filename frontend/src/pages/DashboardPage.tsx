@@ -6,6 +6,7 @@ import {
   GitPullRequest,
   XCircle,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { CounterCard } from '@/components/CounterCard'
@@ -16,6 +17,7 @@ import { formatDateTime } from '@/lib/status'
 import { getDashboard } from '@/services/apiClient'
 
 export function DashboardPage() {
+  const { t } = useTranslation()
   const { data, error, loading, reload, refresh } = useResource(
     (options, signal) => getDashboard(signal, { refresh: options.refresh }),
     [],
@@ -25,8 +27,8 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title="Tableau de bord"
-        description="Vue synthétique des dépôts suivis, des pull requests et de l'état des checks CI."
+        title={t('dashboard.title')}
+        description={t('dashboard.description')}
         actions={<RefreshButton onClick={refresh} loading={loading} />}
       />
 
@@ -34,38 +36,38 @@ export function DashboardPage() {
         {counters ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
             <CounterCard
-              label="Dépôts suivis"
+              label={t('dashboard.counters.repositories')}
               value={counters.repositories}
               icon={FolderGit2}
               accent="text-sky-400"
             />
             <CounterCard
-              label="PR ouvertes"
+              label={t('dashboard.counters.openPullRequests')}
               value={counters.open_pull_requests}
               icon={GitPullRequest}
               accent="text-indigo-400"
             />
             <CounterCard
-              label="Prêtes à fusionner"
+              label={t('dashboard.counters.readyToMerge')}
               value={counters.pull_requests_ready_to_merge}
               icon={GitMerge}
               accent="text-emerald-400"
-              hint="Évaluation indicative"
+              hint={t('dashboard.counters.readyToMergeHint')}
             />
             <CounterCard
-              label="Checks échoués"
+              label={t('dashboard.counters.failingChecks')}
               value={counters.pull_requests_with_failing_checks}
               icon={XCircle}
               accent="text-red-400"
             />
             <CounterCard
-              label="Checks en cours"
+              label={t('dashboard.counters.pendingChecks')}
               value={counters.pull_requests_pending_checks}
               icon={CircleDashed}
               accent="text-amber-400"
             />
             <CounterCard
-              label="Issues ouvertes"
+              label={t('dashboard.counters.openIssues')}
               value={counters.open_issues}
               icon={CheckCircle2}
               accent="text-slate-300"
@@ -76,7 +78,7 @@ export function DashboardPage() {
         {data ? (
           <section className="mt-8">
             <h2 className="mb-3 text-lg font-semibold text-slate-100">
-              Activité récente
+              {t('dashboard.recentActivity')}
             </h2>
             <ul className="divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
               {data.recent_activity.map((item) => (

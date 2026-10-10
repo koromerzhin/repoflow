@@ -11,6 +11,8 @@ import {
   XCircle,
 } from 'lucide-react'
 
+import { useTranslation } from 'react-i18next'
+
 import { Badge } from '@/components/Badge'
 import {
   checkStateClasses,
@@ -33,6 +35,7 @@ import type {
 } from '@/types/api'
 
 export function CheckStateBadge({ state }: { state: CheckState }) {
+  const { t } = useTranslation()
   const icon = {
     success: <CheckCircle2 className="size-3.5" aria-hidden />,
     failure: <XCircle className="size-3.5" aria-hidden />,
@@ -43,12 +46,13 @@ export function CheckStateBadge({ state }: { state: CheckState }) {
   return (
     <Badge className={checkStateClasses[state]}>
       {icon}
-      {checkStateLabels[state]}
+      {t(checkStateLabels[state])}
     </Badge>
   )
 }
 
 export function PullRequestStateBadge({ state }: { state: PullRequestState }) {
+  const { t } = useTranslation()
   const icon = {
     open: <GitPullRequest className="size-3.5" aria-hidden />,
     draft: <Pencil className="size-3.5" aria-hidden />,
@@ -59,21 +63,23 @@ export function PullRequestStateBadge({ state }: { state: PullRequestState }) {
   return (
     <Badge className={pullRequestStateClasses[state]}>
       {icon}
-      {pullRequestStateLabels[state]}
+      {t(pullRequestStateLabels[state])}
     </Badge>
   )
 }
 
 export function ReviewDecisionBadge({ decision }: { decision: ReviewDecision }) {
+  const { t } = useTranslation()
   return (
     <Badge className={reviewDecisionClasses[decision]}>
       <MessageSquareWarning className="size-3.5" aria-hidden />
-      {reviewDecisionLabels[decision]}
+      {t(reviewDecisionLabels[decision])}
     </Badge>
   )
 }
 
 export function IssueStateBadge({ state }: { state: IssueState }) {
+  const { t } = useTranslation()
   const icon =
     state === 'open' ? (
       <CircleDot className="size-3.5" aria-hidden />
@@ -84,16 +90,17 @@ export function IssueStateBadge({ state }: { state: IssueState }) {
   return (
     <Badge className={issueStateClasses[state]}>
       {icon}
-      {issueStateLabels[state]}
+      {t(issueStateLabels[state])}
     </Badge>
   )
 }
 
 export function ReviewStateBadge({ state }: { state: ReviewState }) {
+  const { t } = useTranslation()
   return (
     <Badge className={reviewStateClasses[state]}>
       <MessageSquareWarning className="size-3.5" aria-hidden />
-      {reviewStateLabels[state]}
+      {t(reviewStateLabels[state])}
     </Badge>
   )
 }

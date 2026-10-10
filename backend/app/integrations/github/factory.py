@@ -43,6 +43,7 @@ def _provider_for(
     raise NotConfiguredError(
         f"Fournisseur inconnu : {name!r}.",
         code="unknown_provider",
+        params={"name": name},
     )
 
 

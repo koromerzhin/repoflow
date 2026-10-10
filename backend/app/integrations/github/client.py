@@ -4,6 +4,9 @@ Responsabilités :
 
 - authentifier côté serveur (le token n'est jamais exposé ni journalisé) ;
 - suivre la pagination via l'en-tête ``Link`` ;
+- utiliser des requêtes conditionnelles (``ETag``) : les réponses ``304`` ne
+  consomment pas la limite de requêtes GitHub ;
+- réessayer une fois les limites secondaires (en-tête ``Retry-After``) ;
 - detecter et signaler les limites de requêtes (rate limits) ;
 - normaliser les erreurs GitHub.
 
@@ -12,6 +15,8 @@ Ce module ne contient aucune logique métier.
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -47,6 +52,15 @@ def _is_rate_limited(response: httpx.Response) -> bool:
     return response.headers.get("x-ratelimit-remaining") == "0"
 
 
+@dataclass
+class _ConditionalEntry:
+    """Réponse mise en cache pour une requête conditionnelle (``ETag``)."""
+
+    etag: str
+    body: Any
+    next_link: str | None
+
+
 class GitHubClient:
     """Client HTTP authentifié pour l'API GitHub REST."""
 
@@ -58,10 +72,15 @@ class GitHubClient:
         timeout: float = 30.0,
         per_page: int = 100,
         max_pages: int = 10,
+        max_retry_after: float = 5.0,
+        max_conditional_entries: int = 512,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._per_page = per_page
         self._max_pages = max_pages
+        self._max_retry_after = max_retry_after
+        self._max_conditional_entries = max_conditional_entries
+        self._conditional: dict[str, _ConditionalEntry] = {}
         # Le token est placé dans un en-tête (jamais dans l'URL ni les logs).
         self._client = httpx.AsyncClient(
             base_url=api_url.rstrip("/"),
@@ -91,16 +110,26 @@ class GitHubClient:
         if status_code == 401:
             raise GitHubAuthError("Authentification GitHub refusée : token invalide ou expiré.")
         if status_code in (403, 429):
-            if _is_rate_limited(response):
+            if _is_rate_limited(response) or status_code == 429:
                 raise self._rate_limit_error(response)
             raise GitHubPermissionError(
                 "Accès GitHub refusé : permissions insuffisantes ou ressource protégée."
             )
         if status_code == 404:
-            raise NotFoundError("Ressource GitHub introuvable.")
+            raise NotFoundError(
+                "Ressource GitHub introuvable.",
+                code="github_resource_not_found",
+            )
         if status_code >= 500:
-            raise ProviderError("Erreur côté GitHub, réessayez plus tard.")
-        raise ProviderError(f"Requête GitHub invalide (statut {status_code}).")
+            raise ProviderError(
+                "Erreur côté GitHub, réessayez plus tard.",
+                code="github_unavailable",
+            )
+        raise ProviderError(
+            f"Requête GitHub invalide (statut {status_code}).",
+            code="github_bad_request",
+            params={"status_code": status_code},
+        )
 
     @staticmethod
     def _rate_limit_error(response: httpx.Response) -> GitHubRateLimitError:
@@ -111,11 +140,77 @@ class GitHubClient:
             reset_at=reset_at,
         )
 
+    def _retry_after_seconds(self, response: httpx.Response) -> float | None:
+        raw = response.headers.get("retry-after")
+        if raw is None or not raw.strip().isdigit():
+            return None
+        return min(float(raw), self._max_retry_after)
+
+    def _cache_key(self, path: str, params: dict[str, Any] | None) -> str:
+        if not params:
+            return path
+        query = "&".join(f"{key}={params[key]}" for key in sorted(params))
+        return f"{path}?{query}"
+
+    def _store_conditional(
+        self,
+        key: str,
+        etag: str | None,
+        body: Any,
+        next_link: str | None,
+    ) -> None:
+        if not etag:
+            return
+        if len(self._conditional) >= self._max_conditional_entries:
+            self._conditional.pop(next(iter(self._conditional)))
+        self._conditional[key] = _ConditionalEntry(etag=etag, body=body, next_link=next_link)
+
+    async def _send_with_retry(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
+        """Envoie la requête et réessaie une fois une limite secondaire.
+
+        Les limites secondaires GitHub (``403``/``429`` avec en-tête
+        ``Retry-After``) sont transitoires : une seule nouvelle tentative est
+        effectuée après le délai indiqué (plafonné), puis l'erreur éventuelle
+        est levée normalement.
+        """
+        response = await self._client.request(
+            method, path, params=params, json=json, headers=headers
+        )
+        delay = self._retry_after_seconds(response)
+        if response.status_code in (403, 429) and delay is not None:
+            logger.info("Limite secondaire GitHub ; nouvelle tentative dans %.1fs.", delay)
+            await asyncio.sleep(delay)
+            response = await self._client.request(
+                method, path, params=params, json=json, headers=headers
+            )
+        return response
+
     async def get(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """Effectue une requête GET unique et renvoie le JSON décodé."""
-        response = await self._client.get(path, params=params)
+        """Effectue une requête GET unique et renvoie le JSON décodé.
+
+        Les requêtes conditionnelles (``If-None-Match``) permettent de réutiliser
+        une réponse inchangée sans consommer la limite de requêtes GitHub.
+        """
+        key = self._cache_key(path, params)
+        cached = self._conditional.get(key)
+        headers = {"If-None-Match": cached.etag} if cached else None
+        response = await self._send_with_retry("GET", path, params=params, headers=headers)
+
+        if response.status_code == 304 and cached is not None:
+            return cached.body
+
         self._raise_for_status(response)
-        return response.json()
+        body = response.json()
+        self._store_conditional(key, response.headers.get("etag"), body, None)
+        return body
 
     async def put(self, path: str, json: dict[str, Any] | None = None) -> Any:
         """Effectue une requête PUT et renvoie le JSON décodé.
@@ -123,7 +218,7 @@ class GitHubClient:
         Utilisée uniquement pour les actions d'écriture explicitement
         autorisées (ex. fusion), jamais par défaut.
         """
-        response = await self._client.put(path, json=json)
+        response = await self._send_with_retry("PUT", path, json=json)
         self._raise_for_status(response)
         if response.status_code == 204 or not response.content:
             return {}
@@ -139,7 +234,9 @@ class GitHubClient:
         """Récupère toutes les pages d'une ressource.
 
         ``items_key`` permet d'extraire une liste imbriquée (ex. ``check_runs``).
-        Le nombre de pages est borné par ``max_pages``.
+        Le nombre de pages est borné par ``max_pages``. Chaque page est requêtée
+        de manière conditionnelle (``ETag``) : une page inchangée renvoie
+        ``304`` sans consommer la limite de requêtes GitHub.
         """
         items: list[Any] = []
         page = 1
@@ -148,10 +245,23 @@ class GitHubClient:
             query["per_page"] = self._per_page
             query["page"] = page
 
-            response = await self._client.get(path, params=query)
-            self._raise_for_status(response)
+            key = self._cache_key(path, query)
+            cached = self._conditional.get(key)
+            headers = {"If-None-Match": cached.etag} if cached else None
+            response = await self._send_with_retry("GET", path, params=query, headers=headers)
 
-            payload = response.json()
+            if response.status_code == 304 and cached is not None:
+                payload = cached.body
+                next_link = cached.next_link
+            else:
+                self._raise_for_status(response)
+                payload = response.json()
+                next_link = parse_next_link(response.headers.get("link"))
+                self._store_conditional(key, response.headers.get("etag"), payload, next_link)
+                if _is_rate_limited(response):
+                    # La page suivante nécessiterait une requête impossible.
+                    raise self._rate_limit_error(response)
+
             if items_key is not None and isinstance(payload, dict):
                 items.extend(payload.get(items_key, []))
             elif isinstance(payload, list):
@@ -159,12 +269,8 @@ class GitHubClient:
             else:
                 items.append(payload)
 
-            next_link = parse_next_link(response.headers.get("link"))
             if not next_link:
                 break
-            if _is_rate_limited(response):
-                # La page suivante nécessiterait une requête impossible.
-                raise self._rate_limit_error(response)
             page += 1
             if page > self._max_pages:
                 logger.warning(

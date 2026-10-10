@@ -27,8 +27,21 @@ const repositories: RepositoryListResponse = {
       html_url: 'https://github.com/acme/web-app',
       is_demo: true,
     },
+    {
+      id: 'repo-2',
+      owner: 'acme',
+      name: 'mobile-api',
+      full_name: 'acme/mobile-api',
+      default_branch: 'main',
+      private: true,
+      open_issues_count: 1,
+      open_pull_requests_count: 1,
+      last_updated: '2026-01-01T11:00:00Z',
+      html_url: 'https://github.com/acme/mobile-api',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
 }
 
@@ -94,6 +107,37 @@ const pullRequests: PullRequestListResponse = {
       html_url: 'https://github.com/acme/web-app/pull/143',
       is_demo: true,
     },
+    {
+      id: 'pr-3',
+      number: 144,
+      repository_full_name: 'acme/mobile-api',
+      title: 'Correctif des notifications push',
+      author: 'tom.m',
+      state: 'open',
+      is_draft: false,
+      source_branch: 'fix/notifications',
+      target_branch: 'main',
+      checks_state: 'pending',
+      review_decision: 'none',
+      checks: [
+        {
+          name: 'ci/lint',
+          state: 'pending',
+          conclusion: null,
+          details_url: null,
+          required: false,
+        },
+      ],
+      mergeable: true,
+      changed_files: 3,
+      additions: 12,
+      deletions: 2,
+      merge_eligibility: { eligible: true, blockers: [] },
+      created_at: '2026-01-01T12:00:00Z',
+      updated_at: '2026-01-02T12:00:00Z',
+      html_url: 'https://github.com/acme/mobile-api/pull/144',
+      is_demo: true,
+    },
   ],
   total: 2,
   data_source: 'demo',
@@ -120,10 +164,10 @@ describe('PullRequestsPage', () => {
     expect(screen.getByText('#142')).toBeInTheDocument()
     expect(screen.getByText('acme/web-app · sam.r')).toBeInTheDocument()
     expect(screen.getByText('feature/billing → main')).toBeInTheDocument()
-    expect(screen.getAllByText('Ouverte')).toHaveLength(2)
+    expect(screen.getAllByText('Ouverte')).toHaveLength(3)
     expect(screen.getByText('Approuvée')).toBeInTheDocument()
     expect(screen.getByText('Réussi')).toBeInTheDocument()
-    expect(screen.getByText('Éligible à la fusion')).toBeInTheDocument()
+    expect(screen.getAllByText('Éligible à la fusion')).toHaveLength(2)
     expect(screen.getByText(/2 fichier\(s\) · \+30 \/ −5/)).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Voir sur GitHub' })[0]).toHaveAttribute(
       'href',
@@ -161,10 +205,8 @@ describe('PullRequestsPage', () => {
       expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
     )
 
-    await user.selectOptions(
-      screen.getByRole('combobox'),
-      await screen.findByRole('option', { name: 'acme/web-app' }),
-    )
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByRole('option', { name: /acme\/web-app/ }))
 
     await waitFor(() =>
       expect(getPullRequests).toHaveBeenLastCalledWith(
@@ -172,6 +214,38 @@ describe('PullRequestsPage', () => {
         expect.anything(),
       ),
     )
+  })
+
+  it('filtre les pull requests par recherche texte', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+
+    await waitFor(() => {
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument()
+      expect(screen.queryByText('Mise à jour des dépendances')).not.toBeInTheDocument()
+    })
+  })
+
+  it('affiche la visibilité des dépôts sur les cartes', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('Privé').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0)
   })
 
   it('affiche un état vide', async () => {

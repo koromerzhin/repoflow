@@ -89,12 +89,26 @@ défaut est sûr.
 | `src/components/` | Composants réutilisables (badges, états, cartes). |
 | `src/services/` | Client HTTP centralisé. |
 | `src/hooks/` | Hooks transverses (chargement asynchrone). |
-| `src/lib/` | Libellés français, classes de statut, formatage. |
+| `src/lib/` | Clés de libellés, classes de statut, formatage des dates. |
+| `src/i18n/` | Internationalisation (locales `fr` / `en`, initialisation i18next). |
 | `src/types/` | Types TypeScript calqués sur les schémas Pydantic. |
 
-L'interface est en français, en thème sombre, responsive, et distingue
-systématiquement les états de **chargement**, d'**erreur**, de **liste vide**
-et de **contenu**.
+L'interface est **bilingue français / anglais**, en thème sombre, responsive,
+et distingue systématiquement les états de **chargement**, d'**erreur**, de
+**liste vide** et de **contenu**.
+
+### Internationalisation
+
+- Initialisation dans `src/i18n/index.ts` (i18next + react-i18next +
+  `i18next-browser-languagedetector`) : détection via `?lang=`, puis
+  `localStorage`, puis langue du navigateur ; repli sur le français.
+- Locales dans `src/i18n/locales/{fr,en}.ts` ; les libellés de `src/lib/`
+  référencent des clés (`status.check.success`, …) traduites à l'affichage.
+- La langue choisie est persistée (`localStorage`) et bascule via le
+  sélecteur d'en-tête ; les dates sont formatées selon la langue.
+- Côté backend, les messages (erreurs, bloqueurs de fusion) suivent
+  l'en-tête `Accept-Language`.
+- Les tests forcent le français (`beforeAll` dans `src/test/setup.ts`).
 
 ## Base de données
 

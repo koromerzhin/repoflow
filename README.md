@@ -59,12 +59,15 @@ Pour brancher des vraies données GitHub, éditer `.env` :
   (`GET /api/v1/automation/status`, `POST /api/v1/automation/kill-switch`).
 - Journal d'audit persistant consultable (`GET /api/v1/audit`) : analyses,
   décisions, fusions réussies ou bloquées.
-- Interface React sombre, en français, responsive : navigation, tableau de
-  bord, dépôts, pull requests, détail de PR, issues, automatisations,
-  historique, états de chargement / erreur / vide.
+- Interface React sombre, **bilingue français / anglais** (détection du
+  navigateur, bascule manuelle persistée, `?lang=en`), responsive :
+  navigation, tableau de bord, dépôts, pull requests, détail de PR, issues,
+  automatisations, historique, états de chargement / erreur / vide. Les
+  messages d'erreur de l'API suivent l'en-tête `Accept-Language`.
 - Fournisseur de données abstrait (`demo` / `github`).
 - Connexion GitHub réelle (dépôts, PR, checks CI, revues) avec pagination,
-  gestion du rate limit et erreurs normalisées ; fusion `squash` contrôlée.
+  requêtes conditionnelles (ETag), chargements coalescés, gestion du rate
+  limit et erreurs normalisées ; fusion `squash` contrôlée.
 - Base SQLite ou **PostgreSQL** (migrations Alembic, options de pool
   configurables).
 - **Observabilité** : identifiant de corrélation par requête (`X-Request-ID`)
@@ -87,8 +90,9 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 
 - **Backend** : Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, SQLite /
   PostgreSQL, Pytest (+ couverture), Ruff.
-- **Frontend** : React 19, TypeScript (strict), Vite, React Router, Tailwind
-  CSS, lucide-react, ESLint, Vitest (+ couverture), React Testing Library.
+- **Frontend** : React 19, TypeScript (strict), Vite, React Router, i18next
+  (react-i18next), Tailwind CSS, lucide-react, ESLint, Vitest (+ couverture),
+  React Testing Library.
 - **Exécution** : Docker, Docker Compose, GitHub Actions.
 
 ## Prérequis

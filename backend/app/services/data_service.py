@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.core.cache import get_or_load
 from app.core.config import get_settings
+from app.core.i18n import DEFAULT_LOCALE
 from app.integrations.github.provider import Provider, collect
 from app.integrations.github.types import (
     IssueRecord,
@@ -51,7 +52,9 @@ def repository_to_schema(repository: RepositoryRecord, *, is_demo: bool) -> Repo
     )
 
 
-def pull_request_to_schema(pr: PullRequestRecord, *, is_demo: bool) -> PullRequest:
+def pull_request_to_schema(
+    pr: PullRequestRecord, *, is_demo: bool, locale: str = DEFAULT_LOCALE
+) -> PullRequest:
     """Convertit une pull request du fournisseur en schéma d'API.
 
     Le calcul de l'état agrégé des checks et de l'éligibilité est effectué
@@ -74,7 +77,7 @@ def pull_request_to_schema(pr: PullRequestRecord, *, is_demo: bool) -> PullReque
         changed_files=pr.changed_files,
         additions=pr.additions,
         deletions=pr.deletions,
-        merge_eligibility=evaluate_merge_eligibility(pr),
+        merge_eligibility=evaluate_merge_eligibility(pr, locale=locale),
         created_at=pr.created_at,
         updated_at=pr.updated_at,
         html_url=pr.html_url,
@@ -98,6 +101,7 @@ async def get_pull_requests(
     repository_full_name: str | None = None,
     *,
     refresh: bool = False,
+    locale: str = DEFAULT_LOCALE,
 ) -> list[PullRequest]:
     """Pull requests disponibles auprès du fournisseur (mise en cache TTL)."""
     records: list[PullRequestRecord] = await get_or_load(
@@ -106,14 +110,14 @@ async def get_pull_requests(
         lambda: provider.list_pull_requests(repository_full_name),
         refresh=refresh,
     )
-    return [pull_request_to_schema(pr, is_demo=provider.is_demo) for pr in records]
+    return [pull_request_to_schema(pr, is_demo=provider.is_demo, locale=locale) for pr in records]
 
 
 def pull_request_detail_to_schema(
-    pr: PullRequestDetailRecord, *, is_demo: bool
+    pr: PullRequestDetailRecord, *, is_demo: bool, locale: str = DEFAULT_LOCALE
 ) -> PullRequestDetail:
     """Convertit une pull request détaillée du fournisseur en schéma d'API."""
-    base = pull_request_to_schema(pr, is_demo=is_demo)
+    base = pull_request_to_schema(pr, is_demo=is_demo, locale=locale)
     return PullRequestDetail(
         **base.model_dump(),
         body=pr.body,
@@ -129,6 +133,7 @@ async def get_pull_request(
     number: int,
     *,
     refresh: bool = False,
+    locale: str = DEFAULT_LOCALE,
 ) -> PullRequestDetail:
     """Fiche détaillée d'une pull request (mise en cache TTL)."""
     record: PullRequestDetailRecord = await get_or_load(
@@ -137,7 +142,7 @@ async def get_pull_request(
         lambda: provider.get_pull_request(repository_full_name, number),
         refresh=refresh,
     )
-    return pull_request_detail_to_schema(record, is_demo=provider.is_demo)
+    return pull_request_detail_to_schema(record, is_demo=provider.is_demo, locale=locale)
 
 
 def issue_to_schema(issue: IssueRecord, *, is_demo: bool) -> Issue:

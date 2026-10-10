@@ -486,6 +486,7 @@ class DemoProvider:
             raise NotFoundError(
                 f"Pull request #{number} introuvable pour {repository_full_name}.",
                 code="pull_request_not_found",
+                params={"number": number, "repository_full_name": repository_full_name},
             )
         return self._detail_from(pr)
 
@@ -632,6 +633,7 @@ class DemoProvider:
             raise NotFoundError(
                 f"Pull request #{number} introuvable pour {repository_full_name}.",
                 code="pull_request_not_found",
+                params={"number": number, "repository_full_name": repository_full_name},
             )
         if pr.state != PullRequestState.OPEN:
             return MergeResultRecord(

@@ -1,26 +1,32 @@
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
+import { RepositoryCombobox } from '@/components/RepositoryCombobox'
+import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { IssueStateBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { formatDateTime } from '@/lib/status'
+import { matchesQuery } from '@/lib/search'
 import { getIssues, getRepositories } from '@/services/apiClient'
 import type { IssueState } from '@/types/api'
 
 type StateFilter = IssueState | 'all'
 
-const stateOptions: { value: StateFilter; label: string }[] = [
-  { value: 'open', label: 'Ouvertes' },
-  { value: 'closed', label: 'Fermées' },
-  { value: 'all', label: 'Toutes' },
+const stateOptions: { value: StateFilter; labelKey: string }[] = [
+  { value: 'open', labelKey: 'issues.state.open' },
+  { value: 'closed', labelKey: 'issues.state.closed' },
+  { value: 'all', labelKey: 'issues.state.all' },
 ]
 
 export function IssuesPage() {
+  const { t } = useTranslation()
   const [repository, setRepository] = useState('')
   const [state, setState] = useState<StateFilter>('open')
+  const [query, setQuery] = useState('')
 
   const repositories = useAsync(getRepositories, [])
   const issues = useResource(
@@ -36,36 +42,64 @@ export function IssuesPage() {
     [repository, state],
   )
 
+  const filteredItems = useMemo(() => {
+    const items = issues.data?.items ?? []
+    if (!query.trim()) {
+      return items
+    }
+    return items.filter((issue) =>
+      matchesQuery(
+        `${issue.title} ${issue.author} ${issue.number} ${issue.repository_full_name}`,
+        query,
+      ),
+    )
+  }, [issues.data, query])
+
+  const searching = query.trim().length > 0
+  const visibility = useMemo(
+    () =>
+      new Map(
+        (repositories.data?.items ?? []).map((item) => [item.full_name, item.private]),
+      ),
+    [repositories.data],
+  )
+
   const announcement = issues.data
-    ? `${issues.data.total} issue(s) affichée(s)${repository ? ` pour ${repository}` : ''}.`
+    ? t(repository ? 'issues.announcementFor' : 'issues.announcement', {
+        total: searching ? filteredItems.length : issues.data.total,
+        repository,
+      })
     : ''
 
   return (
     <div>
       <PageHeader
-        title="Issues"
-        description="Issues ouvertes et fermées des dépôts suivis. Les pull requests ne figurent pas dans cette liste."
+        title={t('issues.title')}
+        description={t('issues.description')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton onClick={issues.refresh} loading={issues.loading} />
             <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">Dépôt</span>
-              <select
+              <span className="hidden sm:inline">{t('filter.search')}</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('filter.searchPlaceholder')}
+                className="w-48 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="hidden sm:inline">{t('issues.filterRepository')}</span>
+              <RepositoryCombobox
+                repositories={repositories.data?.items ?? []}
                 value={repository}
-                onChange={(event) => setRepository(event.target.value)}
-                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-              >
-                <option value="">Tous les dépôts</option>
-                {repositories.data?.items.map((item) => (
-                  <option key={item.id} value={item.full_name}>
-                    {item.full_name}
-                  </option>
-                ))}
-              </select>
+                onChange={setRepository}
+              />
             </label>
 
             <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">État</span>
+              <span className="hidden sm:inline">{t('issues.filterState')}</span>
               <select
                 value={state}
                 onChange={(event) => setState(event.target.value as StateFilter)}
@@ -73,7 +107,7 @@ export function IssuesPage() {
               >
                 {stateOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.labelKey)}
                   </option>
                 ))}
               </select>
@@ -89,12 +123,12 @@ export function IssuesPage() {
       <AsyncState
         loading={issues.loading}
         error={issues.error}
-        isEmpty={issues.data?.items.length === 0}
-        emptyMessage="Aucune issue à afficher pour ce filtre."
+        isEmpty={issues.data !== undefined && filteredItems.length === 0}
+        emptyMessage={searching ? t('issues.noMatch') : t('issues.empty')}
         onRetry={issues.reload}
       >
         <ul className="space-y-3">
-          {issues.data?.items.map((issue) => (
+          {filteredItems.map((issue) => (
             <li
               key={issue.id}
               className="rounded-xl border border-slate-800 bg-slate-900/40 p-5"
@@ -105,22 +139,24 @@ export function IssuesPage() {
                     <span className="text-sm font-mono text-slate-500">#{issue.number}</span>
                     <h2 className="text-base font-semibold text-slate-100">{issue.title}</h2>
                   </div>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {issue.repository_full_name} · {issue.author}
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                    {issue.repository_full_name}
+                    <VisibilityBadge isPrivate={visibility.get(issue.repository_full_name)} /> ·{' '}
+                    {issue.author}
                   </p>
                 </div>
                 <IssueStateBadge state={issue.state} />
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4 text-xs text-slate-400">
-                <span>Mise à jour le {formatDateTime(issue.updated_at)}</span>
+                <span>{t('issues.updatedOn', { date: formatDateTime(issue.updated_at) })}</span>
                 <a
                   href={issue.html_url}
                   target="_blank"
                   rel="noreferrer"
                   className="text-sm text-sky-400 hover:text-sky-300"
                 >
-                  Voir sur GitHub
+                  {t('issues.viewOnGitHub')}
                 </a>
               </div>
             </li>
@@ -129,9 +165,9 @@ export function IssuesPage() {
       </AsyncState>
 
       <p className="mt-6 text-center text-xs text-slate-600">
-        Découvrez aussi les{' '}
+        {t('issues.footerPrefix')}{' '}
         <Link to="/pull-requests" className="text-sky-400 hover:text-sky-300">
-          pull requests
+          {t('issues.footerPullRequests')}
         </Link>
         .
       </p>

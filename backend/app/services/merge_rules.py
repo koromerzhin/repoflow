@@ -9,6 +9,7 @@ Un check CI réussi n'est jamais, à lui seul, une autorisation de fusionner.
 
 from __future__ import annotations
 
+from app.core.i18n import DEFAULT_LOCALE, render_message
 from app.integrations.github.types import CheckRecord, PullRequestRecord, PullRequestReviewRecord
 from app.schemas.pull_request import (
     CheckState,
@@ -18,6 +19,17 @@ from app.schemas.pull_request import (
     ReviewDecision,
     ReviewState,
 )
+
+
+def _blocker(
+    code: str,
+    locale: str,
+    params: dict[str, object] | None,
+    fallback: str,
+) -> MergeBlocker:
+    """Construit un blocage au message localisé (repli sur le français)."""
+    message = render_message(f"blocker.{code}", locale, params, fallback)
+    return MergeBlocker(code=code, message=message)
 
 
 def aggregate_checks_state(checks: list[CheckRecord]) -> CheckState:
@@ -59,6 +71,7 @@ def evaluate_merge_eligibility(
     required_approvals: int = 1,
     require_green_checks: bool = True,
     approved_count: int | None = None,
+    locale: str = DEFAULT_LOCALE,
 ) -> MergeEligibility:
     """Évalue (sans exécuter) si la pull request remplit les conditions.
 
@@ -69,30 +82,34 @@ def evaluate_merge_eligibility(
     blockers: list[MergeBlocker] = []
 
     if pr.state != PullRequestState.OPEN:
-        blockers.append(MergeBlocker(code="not_open", message="La pull request n'est pas ouverte."))
+        blockers.append(_blocker("not_open", locale, None, "La pull request n'est pas ouverte."))
     if pr.is_draft:
         blockers.append(
-            MergeBlocker(
-                code="draft",
-                message="Une pull request en brouillon ne peut pas être fusionnée.",
+            _blocker(
+                "draft",
+                locale,
+                None,
+                "Une pull request en brouillon ne peut pas être fusionnée.",
             )
         )
     if not pr.mergeable:
         blockers.append(
-            MergeBlocker(
-                code="conflict",
-                message="La pull request présente des conflits de fusion.",
+            _blocker(
+                "conflict",
+                locale,
+                None,
+                "La pull request présente des conflits de fusion.",
             )
         )
     if required_approvals > 0:
         approved = approved_count if approved_count is not None else _approved_from_decision(pr)
         if approved < required_approvals:
             blockers.append(
-                MergeBlocker(
-                    code="not_approved",
-                    message=(
-                        f"Approbations insuffisantes : {approved}/{required_approvals} requises."
-                    ),
+                _blocker(
+                    "not_approved",
+                    locale,
+                    {"approved": approved, "required": required_approvals},
+                    f"Approbations insuffisantes : {approved}/{required_approvals} requises.",
                 )
             )
     if require_green_checks:
@@ -101,9 +118,11 @@ def evaluate_merge_eligibility(
                 continue
             if check.state != CheckState.SUCCESS:
                 blockers.append(
-                    MergeBlocker(
-                        code="check_not_success",
-                        message=f"Le check obligatoire « {check.name} » n'est pas réussi.",
+                    _blocker(
+                        "check_not_success",
+                        locale,
+                        {"name": check.name},
+                        f"Le check obligatoire « {check.name} » n'est pas réussi.",
                     )
                 )
 

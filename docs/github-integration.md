@@ -96,14 +96,24 @@ Le principe du **moindre privilège** doit s'appliquer :
   La taille de page est bornée à 100 (`REPOFLOW_GITHUB_PER_PAGE`).
   Certaines réponses sont enveloppées (ex. `check_runs`) ; le client extrait
   alors la liste via une clé dédiée.
-- **Limites de requêtes (rate limits)** : détection via
-  `X-RateLimit-Remaining` ; une limite atteinte lève `GitHubRateLimitError`
-  (HTTP 503 côté RepoFlow) en exposant `X-RateLimit-Reset`. Le client interrompt
-  aussi la pagination si la page suivante serait impossible.
+- **Limites de requêtes (rate limits)** : plusieurs mécanismes réduisent la
+  consommation :
+  - **Requêtes conditionnelles** : chaque GET paginé ou non envoie
+    `If-None-Match` (``ETag``) ; une réponse `304` (ressource inchangée) ne
+    consomme pas la limite GitHub et renvoie le corps en cache ;
+  - **Chargements coalescés** : les requêtes concurrentes pour une même
+    ressource partagent un unique chargement fournisseur (*single-flight*) ;
+  - **Cache TTL** mémoire (`REPOFLOW_CACHE_TTL_SECONDS`) côté services.
+  Une limite primaire atteinte (`X-RateLimit-Remaining: 0`) lève
+  `GitHubRateLimitError` (HTTP 503 côté RepoFlow) en exposant
+  `X-RateLimit-Reset`. Une limite secondaire (`403`/`429` avec en-tête
+  `Retry-After`) déclenche une seule nouvelle tentative après le délai
+  indiqué (plafonné à 5 s). Le client interrompt aussi la pagination si la
+  page suivante serait impossible.
 - **Erreurs normalisées** (`app/integrations/github/errors.py`) :
   `401` → `GitHubAuthError`, `403` (hors rate limit) → `GitHubPermissionError`,
-  `403/429` avec rate limit → `GitHubRateLimitError`, `404` → `NotFoundError`,
-  `5xx` → `ProviderError`.
+  `403/429` avec rate limit → `GitHubRateLimitError`, `429` (seuil atteint) →
+  `GitHubRateLimitError`, `404` → `NotFoundError`, `5xx` → `ProviderError`.
 - **Délai d'attente** : `REPOFLOW_GITHUB_TIMEOUT` (secondes) s'applique à
   chaque requête HTTP.
 

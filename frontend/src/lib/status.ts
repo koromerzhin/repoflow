@@ -5,12 +5,13 @@ import type {
   ReviewDecision,
   ReviewState,
 } from '@/types/api'
+import i18n from '@/i18n'
 
 export const checkStateLabels: Record<CheckState, string> = {
-  success: 'Réussi',
-  failure: 'Échoué',
-  pending: 'En cours',
-  unknown: 'Inconnu',
+  success: 'status.check.success',
+  failure: 'status.check.failure',
+  pending: 'status.check.pending',
+  unknown: 'status.check.unknown',
 }
 
 export const checkStateClasses: Record<CheckState, string> = {
@@ -21,10 +22,10 @@ export const checkStateClasses: Record<CheckState, string> = {
 }
 
 export const pullRequestStateLabels: Record<PullRequestState, string> = {
-  open: 'Ouverte',
-  draft: 'Brouillon',
-  closed: 'Fermée',
-  merged: 'Fusionnée',
+  open: 'status.pr.open',
+  draft: 'status.pr.draft',
+  closed: 'status.pr.closed',
+  merged: 'status.pr.merged',
 }
 
 export const pullRequestStateClasses: Record<PullRequestState, string> = {
@@ -35,10 +36,10 @@ export const pullRequestStateClasses: Record<PullRequestState, string> = {
 }
 
 export const reviewDecisionLabels: Record<ReviewDecision, string> = {
-  approved: 'Approuvée',
-  changes_requested: 'Modifications demandées',
-  review_required: 'Revue requise',
-  none: 'Aucune revue',
+  approved: 'status.reviewDecision.approved',
+  changes_requested: 'status.reviewDecision.changesRequested',
+  review_required: 'status.reviewDecision.reviewRequired',
+  none: 'status.reviewDecision.none',
 }
 
 export const reviewDecisionClasses: Record<ReviewDecision, string> = {
@@ -49,8 +50,8 @@ export const reviewDecisionClasses: Record<ReviewDecision, string> = {
 }
 
 export const issueStateLabels: Record<IssueState, string> = {
-  open: 'Ouverte',
-  closed: 'Fermée',
+  open: 'status.issue.open',
+  closed: 'status.issue.closed',
 }
 
 export const issueStateClasses: Record<IssueState, string> = {
@@ -59,11 +60,11 @@ export const issueStateClasses: Record<IssueState, string> = {
 }
 
 export const reviewStateLabels: Record<ReviewState, string> = {
-  approved: 'Approuvée',
-  changes_requested: 'Modifications demandées',
-  commented: 'Commentée',
-  dismissed: 'Rejetée',
-  pending: 'En attente',
+  approved: 'status.review.approved',
+  changes_requested: 'status.review.changesRequested',
+  commented: 'status.review.commented',
+  dismissed: 'status.review.dismissed',
+  pending: 'status.review.pending',
 }
 
 export const reviewStateClasses: Record<ReviewState, string> = {
@@ -75,11 +76,11 @@ export const reviewStateClasses: Record<ReviewState, string> = {
 }
 
 export const fileStatusLabels: Record<string, string> = {
-  added: 'Ajouté',
-  modified: 'Modifié',
-  removed: 'Supprimé',
-  renamed: 'Renommé',
-  copied: 'Copié',
+  added: 'status.file.added',
+  modified: 'status.file.modified',
+  removed: 'status.file.removed',
+  renamed: 'status.file.renamed',
+  copied: 'status.file.copied',
 }
 
 export const fileStatusClasses: Record<string, string> = {
@@ -91,12 +92,12 @@ export const fileStatusClasses: Record<string, string> = {
 }
 
 export const auditEventLabels: Record<string, string> = {
-  analysis: 'Analyse',
-  analysis_error: 'Erreur d’analyse',
-  merge_blocked: 'Fusion bloquée',
-  merge_skipped: 'Fusion différée',
-  merge_succeeded: 'Fusion réussie',
-  merge_failed: 'Échec de fusion',
+  analysis: 'status.audit.analysis',
+  analysis_error: 'status.audit.analysis_error',
+  merge_blocked: 'status.audit.merge_blocked',
+  merge_skipped: 'status.audit.merge_skipped',
+  merge_succeeded: 'status.audit.merge_succeeded',
+  merge_failed: 'status.audit.merge_failed',
 }
 
 export const auditEventClasses: Record<string, string> = {
@@ -116,15 +117,24 @@ export function auditEventClass(eventType: string): string {
   return auditEventClasses[eventType] ?? 'bg-slate-500/15 text-slate-300 ring-slate-500/30'
 }
 
-const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
+const formatters: Record<string, Intl.DateTimeFormat> = {}
+
+function formatterFor(locale: string): Intl.DateTimeFormat {
+  let formatter = formatters[locale]
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+    formatters[locale] = formatter
+  }
+  return formatter
+}
 
 export function formatDateTime(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {
     return '—'
   }
-  return dateFormatter.format(date)
+  return formatterFor(i18n.resolvedLanguage ?? 'fr').format(date)
 }

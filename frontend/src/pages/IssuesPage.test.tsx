@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -85,6 +86,51 @@ describe('IssuesPage', () => {
     await waitFor(() =>
       expect(screen.getByText('Aucune issue à afficher pour ce filtre.')).toBeInTheDocument(),
     )
+  })
+
+  it('filtre les issues par recherche texte', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'réinitialisation')
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument()
+    })
+
+    await user.clear(screen.getByRole('searchbox'))
+    await user.type(screen.getByRole('searchbox'), 'inexistant')
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Aucune issue ne correspond à cette recherche.'),
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('affiche la visibilité du dépôt sur les cartes', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0)
   })
 
   it('affiche une erreur exploitable', async () => {

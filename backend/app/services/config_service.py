@@ -68,6 +68,7 @@ def get_repository_config(session: Session, config_id: int) -> RepositoryConfig:
         raise NotFoundError(
             f"Dépôt suivi #{config_id} introuvable.",
             code="repository_config_not_found",
+            params={"config_id": config_id},
         )
     return config
 
@@ -81,6 +82,7 @@ def create_repository_config(session: Session, payload: RepositoryConfigCreate) 
         raise ConflictError(
             f"Le dépôt {payload.full_name} est déjà suivi.",
             code="repository_config_exists",
+            params={"full_name": payload.full_name},
         )
 
     owner, _, name = payload.full_name.partition("/")
@@ -144,7 +146,11 @@ def get_rule(session: Session, rule_id: int) -> AutomationRule:
     """Retourne une règle ou lève ``NotFoundError``."""
     rule = session.get(AutomationRule, rule_id)
     if rule is None:
-        raise NotFoundError(f"Règle #{rule_id} introuvable.", code="automation_rule_not_found")
+        raise NotFoundError(
+            f"Règle #{rule_id} introuvable.",
+            code="automation_rule_not_found",
+            params={"rule_id": rule_id},
+        )
     return rule
 
 
