@@ -13,6 +13,27 @@ et de préparer la fusion des pull requests selon des règles configurables.
 > n'a lieu que si une règle l'autorise, que la PR est éligible et que
 > l'arrêt d'urgence est désengagé.
 
+## Démarrage rapide (Docker Compose)
+
+Le moyen le plus simple, si Docker est installé — aucun prérequis Python/Node :
+
+```bash
+git clone <url-du-depot> repoflow
+cd repoflow
+cp .env.example .env
+docker compose up --build
+```
+
+- Interface : http://localhost:5173
+- API : http://localhost:8000 (documentation Swagger : `/docs`)
+- Par défaut : **mode démonstration** (données fictives, aucun jeton requis)
+  et base SQLite persistée dans un volume Docker.
+
+Pour brancher des vraies données GitHub, éditer `.env` :
+`REPOFLOW_GITHUB_PROVIDER=github` et renseigner `REPOFLOW_GITHUB_TOKEN`
+(voir `docs/github-integration.md`). Pour utiliser PostgreSQL :
+`docker compose --profile postgres up --build` (détails plus bas).
+
 ## Fonctionnalités
 
 ### Disponibles
@@ -130,7 +151,9 @@ npm run dev
 Le frontend relaie les appels `/api` vers le backend (proxy Vite), aucune
 configuration CORS supplémentaire n'est nécessaire.
 
-## Exécution via Docker Compose
+## Exécution via Docker Compose (détaillée)
+
+Cf. aussi « Démarrage rapide » en haut de page.
 
 ```bash
 cp .env.example .env
@@ -142,7 +165,7 @@ docker compose up --build
 
 La base SQLite est persistée dans un volume Docker nommé.
 
-Avec PostgreSQL :
+Avec PostgreSQL (profil optionnel) :
 
 ```bash
 # 1. Adapter .env :
