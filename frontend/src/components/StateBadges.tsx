@@ -1,7 +1,9 @@
 import {
   CheckCircle2,
   CircleDashed,
+  CircleDot,
   CircleHelp,
+  CheckCheck,
   GitMerge,
   GitPullRequest,
   MessageSquareWarning,
@@ -13,12 +15,22 @@ import { Badge } from '@/components/Badge'
 import {
   checkStateClasses,
   checkStateLabels,
+  issueStateClasses,
+  issueStateLabels,
   pullRequestStateClasses,
   pullRequestStateLabels,
   reviewDecisionClasses,
   reviewDecisionLabels,
+  reviewStateClasses,
+  reviewStateLabels,
 } from '@/lib/status'
-import type { CheckState, PullRequestState, ReviewDecision } from '@/types/api'
+import type {
+  CheckState,
+  IssueState,
+  PullRequestState,
+  ReviewDecision,
+  ReviewState,
+} from '@/types/api'
 
 export function CheckStateBadge({ state }: { state: CheckState }) {
   const icon = {
@@ -57,6 +69,31 @@ export function ReviewDecisionBadge({ decision }: { decision: ReviewDecision }) 
     <Badge className={reviewDecisionClasses[decision]}>
       <MessageSquareWarning className="size-3.5" aria-hidden />
       {reviewDecisionLabels[decision]}
+    </Badge>
+  )
+}
+
+export function IssueStateBadge({ state }: { state: IssueState }) {
+  const icon =
+    state === 'open' ? (
+      <CircleDot className="size-3.5" aria-hidden />
+    ) : (
+      <CheckCheck className="size-3.5" aria-hidden />
+    )
+
+  return (
+    <Badge className={issueStateClasses[state]}>
+      {icon}
+      {issueStateLabels[state]}
+    </Badge>
+  )
+}
+
+export function ReviewStateBadge({ state }: { state: ReviewState }) {
+  return (
+    <Badge className={reviewStateClasses[state]}>
+      <MessageSquareWarning className="size-3.5" aria-hidden />
+      {reviewStateLabels[state]}
     </Badge>
   )
 }

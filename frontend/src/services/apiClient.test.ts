@@ -1,6 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getHealth, getPullRequests } from '@/services/apiClient'
+import {
+  ApiError,
+  createRepositoryConfig,
+  deleteRepositoryConfig,
+  getAudit,
+  getHealth,
+  getIssues,
+  getPullRequestDetail,
+  getPullRequests,
+  setKillSwitch,
+  updateRule,
+} from '@/services/apiClient'
 
 const healthPayload = {
   status: 'ok',
@@ -76,6 +87,133 @@ describe('apiClient', () => {
     await getPullRequests({ repository: 'acme/web-app' })
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/pull-requests?repository=acme%2Fweb-app',
+      expect.anything(),
+    )
+  })
+
+  it('construit les filtres de la requête issues', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getIssues({ repository: 'acme/web-app', state: 'closed' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/issues?repository=acme%2Fweb-app&state=closed',
+      expect.anything(),
+    )
+  })
+
+  it('ajoute le paramètre refresh quand demandé', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getIssues({ state: 'open', refresh: true })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/issues?state=open&refresh=true',
+      expect.anything(),
+    )
+  })
+
+  it('construit l’URL du détail de pull request', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ number: 142 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getPullRequestDetail(142, 'acme/web-app')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/pull-requests/142?repository=acme%2Fweb-app',
+      expect.anything(),
+    )
+  })
+
+  it('crée une configuration de dépôt via POST', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: 1, full_name: 'acme/web-app' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await createRepositoryConfig({ full_name: 'acme/web-app', default_branch: 'main' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/configs/repositories',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ full_name: 'acme/web-app', default_branch: 'main' }),
+      }),
+    )
+  })
+
+  it('met à jour une règle via PATCH', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ id: 3 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await updateRule(3, { auto_merge_enabled: true })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/configs/rules/3',
+      expect.objectContaining({ method: 'PATCH' }),
+    )
+  })
+
+  it('bascule l’arrêt d’urgence via POST', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ kill_switch_engaged: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const status = await setKillSwitch(true)
+    expect(status.kill_switch_engaged).toBe(true)
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/automation/kill-switch',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ engaged: true }) }),
+    )
+  })
+
+  it('supprime un dépôt suivi sans contenu de réponse', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+
+    await expect(deleteRepositoryConfig(7)).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/configs/repositories/7',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('construit les filtres du journal d’audit', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getAudit({ event_type: 'merge_succeeded', repository: 'acme/web-app' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/audit?event_type=merge_succeeded&repository=acme%2Fweb-app',
       expect.anything(),
     )
   })

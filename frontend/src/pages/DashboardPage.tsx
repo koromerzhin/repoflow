@@ -10,12 +10,16 @@ import {
 import { AsyncState } from '@/components/AsyncState'
 import { CounterCard } from '@/components/CounterCard'
 import { PageHeader } from '@/components/PageHeader'
-import { useAsync } from '@/hooks/useAsync'
+import { RefreshButton } from '@/components/RefreshButton'
+import { useResource } from '@/hooks/useAsync'
 import { formatDateTime } from '@/lib/status'
 import { getDashboard } from '@/services/apiClient'
 
 export function DashboardPage() {
-  const { data, error, loading, reload } = useAsync(getDashboard, [])
+  const { data, error, loading, reload, refresh } = useResource(
+    (options, signal) => getDashboard(signal, { refresh: options.refresh }),
+    [],
+  )
   const counters = data?.counters
 
   return (
@@ -23,6 +27,7 @@ export function DashboardPage() {
       <PageHeader
         title="Tableau de bord"
         description="Vue synthétique des dépôts suivis, des pull requests et de l'état des checks CI."
+        actions={<RefreshButton onClick={refresh} loading={loading} />}
       />
 
       <AsyncState loading={loading} error={error} onRetry={reload}>

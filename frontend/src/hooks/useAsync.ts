@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '@/services/apiClient'
 
@@ -63,4 +63,38 @@ export function useAsync<T>(
   }, [nonce, ...deps])
 
   return { data, error, loading, reload }
+}
+
+export interface RefreshableAsyncState<T> extends AsyncState<T> {
+  refresh: () => void
+}
+
+/**
+ * Variante de {@link useAsync} exposant un rafraîchissement manuel. Le bouton
+ * associé transmet ``{ refresh: true }`` à la fabrique afin de contourner le
+ * cache côté serveur, contrairement à ``reload`` qui respecte le cache.
+ */
+export function useResource<T>(
+  factory: (options: { refresh: boolean }, signal: AbortSignal) => Promise<T>,
+  deps: readonly unknown[] = [],
+): RefreshableAsyncState<T> {
+  const forceRef = useRef(false)
+  const [nonce, setNonce] = useState(0)
+
+  const wrapped = useCallback(
+    (signal: AbortSignal) => {
+      const refresh = forceRef.current
+      forceRef.current = false
+      return factory({ refresh }, signal)
+    },
+    [factory],
+  )
+
+  const state = useAsync(wrapped, [nonce, ...deps])
+  const refresh = useCallback(() => {
+    forceRef.current = true
+    setNonce((value) => value + 1)
+  }, [])
+
+  return { ...state, refresh }
 }

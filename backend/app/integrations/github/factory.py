@@ -12,11 +12,18 @@ from app.integrations.github.provider import Provider
 
 
 @lru_cache
-def _provider_for(name: str, token: str | None) -> Provider:
+def _provider_for(
+    name: str,
+    token: str | None,
+    api_url: str,
+    timeout: float,
+    per_page: int,
+    max_pages: int,
+) -> Provider:
     """Construit et met en cache le fournisseur.
 
-    La mise en cache s'appuie sur des arguments hachables (``name``, ``token``)
-    car les instances ``Settings`` de Pydantic ne sont pas hachables.
+    La mise en cache s'appuie sur des arguments hachables car les instances
+    ``Settings`` de Pydantic ne sont pas hachables.
     """
     if name == "demo":
         return DemoProvider()
@@ -26,7 +33,13 @@ def _provider_for(name: str, token: str | None) -> Provider:
                 "REPOFLOW_GITHUB_TOKEN doit être défini pour le fournisseur 'github'.",
                 code="github_token_missing",
             )
-        return GithubProvider(token=token)
+        return GithubProvider(
+            token=token,
+            api_url=api_url,
+            timeout=timeout,
+            per_page=per_page,
+            max_pages=max_pages,
+        )
     raise NotConfiguredError(
         f"Fournisseur inconnu : {name!r}.",
         code="unknown_provider",
@@ -36,7 +49,14 @@ def _provider_for(name: str, token: str | None) -> Provider:
 def build_provider(settings: Settings) -> Provider:
     """Construit le fournisseur courant selon la configuration."""
     token = settings.github_token.get_secret_value() if settings.github_token else None
-    return _provider_for(settings.github_provider, token)
+    return _provider_for(
+        settings.github_provider,
+        token,
+        settings.github_api_url,
+        settings.github_timeout,
+        settings.github_per_page,
+        settings.github_max_pages,
+    )
 
 
 def get_provider() -> Provider:

@@ -70,3 +70,9 @@ Thumbs.db
 # --- Divers ---
 *.log
 tmp/
+
+# --- Exceptions ---
+# Le motif Python « lib/ » (artefacts setuptools) ne doit pas masquer les
+# sources frontend.
+!frontend/src/lib/
+!frontend/src/lib/**

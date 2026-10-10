@@ -7,7 +7,7 @@ import logging.config
 
 from app.core.config import Settings
 
-_LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s %(message)s"
+_LOG_FORMAT = "%(asctime)s %(levelname)-8s [%(request_id)s] %(name)s %(message)s"
 
 
 def configure_logging(settings: Settings) -> None:
@@ -19,10 +19,14 @@ def configure_logging(settings: Settings) -> None:
             "formatters": {
                 "default": {"format": _LOG_FORMAT, "datefmt": "%Y-%m-%dT%H:%M:%S%z"},
             },
+            "filters": {
+                "request_id": {"()": "app.core.request_context.RequestIdFilter"},
+            },
             "handlers": {
                 "console": {
                     "class": "logging.StreamHandler",
                     "formatter": "default",
+                    "filters": ["request_id"],
                     "stream": "ext://sys.stdout",
                 },
             },
@@ -31,6 +35,10 @@ def configure_logging(settings: Settings) -> None:
                 "uvicorn": {"level": settings.log_level.upper(), "propagate": True},
                 "uvicorn.error": {"level": settings.log_level.upper(), "propagate": True},
                 "uvicorn.access": {"level": "WARNING", "propagate": True},
+                # Évite toute journalisation verbeuse des requêtes HTTP sortantes
+                # (les en-têtes d'authentification ne doivent jamais apparaître).
+                "httpx": {"level": "WARNING", "propagate": True},
+                "httpcore": {"level": "WARNING", "propagate": True},
             },
         }
     )

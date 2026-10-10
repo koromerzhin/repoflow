@@ -17,6 +17,7 @@ os.environ["REPOFLOW_DATABASE_URL"] = f"sqlite+pysqlite:///{_db_path}"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import delete  # noqa: E402
 
 from app.main import app  # noqa: E402
 
@@ -26,6 +27,29 @@ def client() -> Iterator[TestClient]:
     """Client HTTP de test, avec cycle de vie de l'application."""
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(autouse=True)
+def _clean_tables() -> Iterator[None]:
+    """Vide les tables de configuration et d'audit avant chaque test."""
+    from app.db.init_db import create_all
+    from app.db.session import get_session_factory
+    from app.models.entities import (
+        AuditEvent,
+        AutomationRule,
+        RepositoryConfig,
+        SystemSetting,
+    )
+
+    create_all()
+    session = get_session_factory()()
+    try:
+        for model in (AuditEvent, AutomationRule, RepositoryConfig, SystemSetting):
+            session.execute(delete(model))
+        session.commit()
+    finally:
+        session.close()
+    yield
 
 
 @pytest.fixture(scope="session", autouse=True)

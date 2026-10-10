@@ -5,9 +5,13 @@ GitHub**. Elle permet de suivre plusieurs dépôts distants sans les cloner,
 de consulter leurs issues et pull requests, de contrôler l'état des checks CI
 et de préparer la fusion des pull requests selon des règles configurables.
 
-> **État du projet : socle initial (v0.1).** L'application fonctionne en
-> **mode démonstration** avec des données fictives clairement identifiées.
-> La connexion à GitHub et la fusion automatique ne sont pas encore actives.
+> **État du projet : v0.1.** L'application fonctionne par défaut en **mode
+> démonstration** avec des données fictives clairement identifiées. La
+> connexion à l'API GitHub réelle est disponible via
+> `REPOFLOW_GITHUB_PROVIDER=github` + `REPOFLOW_GITHUB_TOKEN`. La fusion
+> automatique `squash` est **implémentée mais désactivée par défaut** : elle
+> n'a lieu que si une règle l'autorise, que la PR est éligible et que
+> l'arrêt d'urgence est désengagé.
 
 ## Fonctionnalités
 
@@ -18,29 +22,51 @@ et de préparer la fusion des pull requests selon des règles configurables.
 - Dépôts `GET /api/v1/repositories`.
 - Pull requests `GET /api/v1/pull-requests` (filtre par dépôt) avec état
   agrégé des checks et éligibilité de fusion **indicative**.
+- Issues `GET /api/v1/issues` (filtres par dépôt et par état) — les pull
+  requests sont exclues de cette liste.
+- Détail d'une pull request `GET /api/v1/pull-requests/{number}` : fichiers
+  modifiés, revues et timeline, avec page frontend dédiée.
+- Cache TTL mémoire des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`)
+  et rafraîchissement manuel via `?refresh=true` ou les boutons « Rafraîchir ».
+- Configuration des dépôts suivis et des règles d'automatisation
+  (`/api/v1/configs/*`) : CRUD complet, validation stricte côté serveur.
+- Worker d'analyse périodique (`python -m app.worker` ou
+  `REPOFLOW_WORKER_ENABLED=true`) : évalue les règles et fusionne les PR
+  éligibles en `squash` lorsque l'automatisation est explicitement autorisée.
+- État des automatisations et arrêt d'urgence global
+  (`GET /api/v1/automation/status`, `POST /api/v1/automation/kill-switch`).
+- Journal d'audit persistant consultable (`GET /api/v1/audit`) : analyses,
+  décisions, fusions réussies ou bloquées.
 - Interface React sombre, en français, responsive : navigation, tableau de
-  bord, dépôts, pull requests, états de chargement / erreur / vide.
+  bord, dépôts, pull requests, détail de PR, issues, automatisations,
+  historique, états de chargement / erreur / vide.
 - Fournisseur de données abstrait (`demo` / `github`).
-- Base SQLite, migrations Alembic, historique d'audit et règles
-  d'automatisation (désactivées par défaut).
-- Tests backend (Pytest) et frontend (Vitest + Testing Library).
-- Docker Compose et CI GitHub Actions.
+- Connexion GitHub réelle (dépôts, PR, checks CI, revues) avec pagination,
+  gestion du rate limit et erreurs normalisées ; fusion `squash` contrôlée.
+- Base SQLite ou **PostgreSQL** (migrations Alembic, options de pool
+  configurables).
+- **Observabilité** : identifiant de corrélation par requête (`X-Request-ID`)
+  propagé dans les journaux et les réponses, journal d'accès, métriques
+  Prometheus sur `GET /api/metrics` (compteurs et durées par route).
+- **Sécurité** : en-têtes HTTP restrictifs (CSP sur l'API, `nosniff`, DENY
+  *frame*…), HSTS optionnel, limitation de débit par adresse IP.
+- **Qualité** : couverture de tests suivie en CI (backend ≥ 90 %, frontend
+  ≥ 80 % de lignes).
+- Tests backend (Pytest + coverage) et frontend (Vitest + coverage).
+- Docker Compose (backend, frontend, PostgreSQL optionnel) et CI GitHub
+  Actions.
 
 ### À venir
 
-- Connexion réelle à GitHub (GitHub App ou token fine-grained).
-- Consultation des issues.
-- Configuration des règles d'automatisation par dépôt et par branche.
-- Fusion automatique `squash` **contrôlée côté serveur** (désactivée par défaut).
-- Worker d'analyse périodique.
-- Journal d'audit consultable dans l'interface.
+- Configuration de l'échange clé privée → jeton d'installation (GitHub App).
+- Exécution du worker en service séparé dédié (image partagée).
 
 ## Technologies
 
-- **Backend** : Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, SQLite,
-  Pytest, Ruff.
+- **Backend** : Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, SQLite /
+  PostgreSQL, Pytest (+ couverture), Ruff.
 - **Frontend** : React 19, TypeScript (strict), Vite, React Router, Tailwind
-  CSS, lucide-react, ESLint, Vitest, React Testing Library.
+  CSS, lucide-react, ESLint, Vitest (+ couverture), React Testing Library.
 - **Exécution** : Docker, Docker Compose, GitHub Actions.
 
 ## Prérequis
@@ -79,6 +105,16 @@ uvicorn app.main:app --reload --port 8000
 Par défaut, la base SQLite est créée automatiquement et le mode
 démonstration est actif (aucun token requis).
 
+Le worker d'analyse périodique est désactivé par défaut. Pour l'exécuter
+manuellement (une passe) ou en continu :
+
+```bash
+python -m app.worker
+```
+
+Il peut aussi être démarré automatiquement avec l'API via
+`REPOFLOW_WORKER_ENABLED=true` (intervalle : `REPOFLOW_WORKER_INTERVAL_SECONDS`).
+
 ### Frontend
 
 Dans un second terminal :
@@ -106,6 +142,15 @@ docker compose up --build
 
 La base SQLite est persistée dans un volume Docker nommé.
 
+Avec PostgreSQL :
+
+```bash
+# 1. Adapter .env :
+#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
+# 2. Lancer, profil "postgres" inclus :
+docker compose --profile postgres up --build
+```
+
 ## Tests et qualité
 
 ### Backend
@@ -115,8 +160,11 @@ cd backend
 source .venv/bin/activate
 ruff check .          # lint
 ruff format --check . # formatage
-pytest                # tests
+pytest                # tests + couverture (seuil : 90 %)
 ```
+
+La couverture est mesurée par défaut (`pytest` inclut `--cov=app`) ; la
+commande échoue sous 90 % de couverture.
 
 Migrations :
 
@@ -128,10 +176,11 @@ alembic upgrade head
 
 ```bash
 cd frontend
-npm run lint       # ESLint
-npm run typecheck  # TypeScript strict
-npm test           # Vitest
-npm run build      # build de production
+npm run lint            # ESLint
+npm run typecheck       # TypeScript strict
+npm test                # Vitest
+npm run test:coverage   # Vitest + couverture (seuils : lignes 80 %, branches 65 %)
+npm run build           # build de production
 ```
 
 ## Structure du projet
@@ -140,14 +189,16 @@ npm run build      # build de production
 repoflow/
 ├── backend/
 │   ├── app/
-│   │   ├── api/            # routes HTTP (v1) + santé
-│   │   ├── core/           # config, logging, erreurs
+│   │   ├── api/            # routes HTTP (v1) + santé + métriques
+│   │   ├── core/           # config, logging, erreurs, sécurité,
+│   │   │                   #   métriques, contexte de requête
 │   │   ├── db/             # moteur, sessions, init
 │   │   ├── models/         # modèles SQLAlchemy
 │   │   ├── schemas/        # schémas Pydantic
 │   │   ├── services/       # règles métier
 │   │   ├── integrations/
 │   │   │   └── github/     # fournisseur abstrait (démo + GitHub)
+│   │   ├── worker.py       # worker d'analyse périodique
 │   │   └── main.py
 │   ├── alembic/            # migrations
 │   ├── tests/
@@ -157,11 +208,12 @@ repoflow/
 │       ├── components/  features/  layouts/  pages/
 │       ├── services/    hooks/     lib/      types/
 │       └── main.tsx
-├── docs/                   # documentation d'architecture et GitHub
+├── docs/                   # architecture, GitHub, guide utilisateur
 ├── .github/workflows/      # CI
 ├── docker-compose.yml
 ├── .env.example
 ├── AGENTS.md
+├── CONTRIBUTING.md
 ├── PLAN.md
 └── README.md
 ```
@@ -170,13 +222,19 @@ repoflow/
 
 - Aucun secret dans le frontend, les journaux ou les URL.
 - Les tokens GitHub restent côté serveur avec des permissions minimales.
-- Aucune fusion automatique n'est active par défaut ; toute action de fusion
-  sera contrôlée côté serveur.
+- La fusion automatique est désactivée par défaut (`REPOFLOW_AUTO_MERGE_ENABLED_GLOBALLY=false`)
+  et doit être explicitement autorisée **à la fois** globalement et par règle.
 - Un check échoué, en cours ou inconnu n'est **jamais** considéré comme réussi.
 - Une pull request en brouillon n'est jamais fusionnée automatiquement.
-- Un arrêt d'urgence global est prévu (`REPOFLOW_KILL_SWITCH_ENGAGED`).
+- La fusion n'est envisagée que vers la branche par défaut du dépôt (protection
+  de branche prudente) ; aucun contournement administrateur.
+- Un arrêt d'urgence global est opérationnel (`REPOFLOW_KILL_SWITCH_ENGAGED`
+  ou bascule via l'API/la page Automatisations).
+- Le worker n'exécute une fusion que si toutes les conditions sont réunies ;
+  chaque décision est journalisée dans l'audit.
 
-Voir `docs/architecture.md` et `docs/github-integration.md` pour les détails.
+Voir `docs/architecture.md`, `docs/github-integration.md` et
+`docs/user-guide.md` pour les détails.
 
 ## Licence
 

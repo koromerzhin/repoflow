@@ -11,7 +11,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.schemas.pull_request import CheckState, PullRequestState, ReviewDecision
+from app.schemas.issue import IssueState
+from app.schemas.pull_request import (
+    CheckState,
+    PullRequestState,
+    ReviewDecision,
+    ReviewState,
+)
 
 
 class RepositoryRecord(BaseModel):
@@ -39,6 +45,21 @@ class CheckRecord(BaseModel):
     details_url: str | None = None
 
 
+class IssueRecord(BaseModel):
+    """Issue brute telle que fournie par le fournisseur."""
+
+    id: str
+    number: int = Field(ge=1)
+    repository_full_name: str
+    title: str
+    author: str
+    state: IssueState
+    is_pull_request: bool = False
+    created_at: datetime
+    updated_at: datetime
+    html_url: str
+
+
 class PullRequestRecord(BaseModel):
     """Pull request brute avec ses checks."""
 
@@ -60,3 +81,50 @@ class PullRequestRecord(BaseModel):
     created_at: datetime
     updated_at: datetime
     html_url: str
+
+
+class PullRequestFileRecord(BaseModel):
+    """Fichier modifié par une pull request."""
+
+    filename: str
+    status: str
+    additions: int = Field(ge=0)
+    deletions: int = Field(ge=0)
+    changes: int = Field(ge=0)
+
+
+class PullRequestReviewRecord(BaseModel):
+    """Revue déposée sur une pull request."""
+
+    id: str
+    author: str
+    state: ReviewState
+    body: str | None = None
+    submitted_at: datetime | None = None
+
+
+class TimelineEventRecord(BaseModel):
+    """Événement de la chronologie d'une pull request."""
+
+    id: str
+    event_type: str
+    actor: str
+    message: str
+    created_at: datetime
+
+
+class PullRequestDetailRecord(PullRequestRecord):
+    """Pull request détaillée avec description, fichiers, revues et chronologie."""
+
+    body: str | None = None
+    files: list[PullRequestFileRecord] = Field(default_factory=list)
+    reviews: list[PullRequestReviewRecord] = Field(default_factory=list)
+    timeline: list[TimelineEventRecord] = Field(default_factory=list)
+
+
+class MergeResultRecord(BaseModel):
+    """Résultat d'une tentative de fusion d'une pull request."""
+
+    merged: bool
+    message: str
+    sha: str | None = None

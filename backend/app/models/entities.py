@@ -70,3 +70,17 @@ class AuditEvent(TimestampMixin, Base):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class SystemSetting(TimestampMixin, Base):
+    """Réglage persistant modifiable à chaud (ex. arrêt d'urgence).
+
+    Permet à l'arrêt d'urgence de survivre à un redémarrage, sans redéployer.
+    """
+
+    __tablename__ = "system_settings"
+    __table_args__ = (UniqueConstraint("key", name="uq_system_settings_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)

@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.integrations.github.types import CheckRecord, PullRequestRecord
-from app.schemas.pull_request import CheckState, PullRequestState, ReviewDecision
-from app.services.merge_rules import aggregate_checks_state, evaluate_merge_eligibility
+from app.integrations.github.types import (
+    CheckRecord,
+    PullRequestRecord,
+    PullRequestReviewRecord,
+)
+from app.schemas.pull_request import CheckState, PullRequestState, ReviewDecision, ReviewState
+from app.services.merge_rules import (
+    aggregate_checks_state,
+    count_approved_reviews,
+    evaluate_merge_eligibility,
+)
 
 _NOW = datetime.now(UTC)
 
@@ -98,3 +106,49 @@ def test_closed_pull_request_not_eligible() -> None:
     result = evaluate_merge_eligibility(_pr(state=PullRequestState.CLOSED))
     assert result.eligible is False
     assert "not_open" in {blocker.code for blocker in result.blockers}
+
+
+def _review(author: str, state: ReviewState) -> PullRequestReviewRecord:
+    return PullRequestReviewRecord(id=f"r-{author}", author=author, state=state, submitted_at=_NOW)
+
+
+def test_count_approved_reviews_derniere_revue() -> None:
+    reviews = [
+        _review("alice", ReviewState.CHANGES_REQUESTED),
+        _review("alice", ReviewState.APPROVED),
+        _review("bob", ReviewState.APPROVED),
+        _review("carol", ReviewState.COMMENTED),
+    ]
+    assert count_approved_reviews(reviews) == 2
+
+
+def test_approbations_requises_non_atteintes() -> None:
+    result = evaluate_merge_eligibility(
+        _pr(review_decision=ReviewDecision.REVIEW_REQUIRED),
+        required_approvals=2,
+        approved_count=1,
+    )
+    assert result.eligible is False
+    assert "not_approved" in {blocker.code for blocker in result.blockers}
+
+
+def test_approbations_suffisantes() -> None:
+    result = evaluate_merge_eligibility(
+        _pr(review_decision=ReviewDecision.REVIEW_REQUIRED),
+        required_approvals=2,
+        approved_count=2,
+    )
+    assert result.eligible is True
+
+
+def test_aucune_approbation_requise() -> None:
+    result = evaluate_merge_eligibility(
+        _pr(review_decision=ReviewDecision.NONE),
+        required_approvals=0,
+    )
+    assert result.eligible is True
+
+
+def test_checks_non_exiges_ignores() -> None:
+    pr = _pr(checks=[_check(CheckState.FAILURE)])
+    assert evaluate_merge_eligibility(pr, require_green_checks=False).eligible is True

@@ -2,10 +2,25 @@
 
 from __future__ import annotations
 
+from app.core.cache import get_or_load
+from app.core.config import get_settings
 from app.integrations.github.provider import Provider, collect
-from app.integrations.github.types import PullRequestRecord, RepositoryRecord
+from app.integrations.github.types import (
+    IssueRecord,
+    PullRequestDetailRecord,
+    PullRequestRecord,
+    RepositoryRecord,
+)
 from app.schemas.common import ProviderInfo
-from app.schemas.pull_request import Check, PullRequest
+from app.schemas.issue import Issue
+from app.schemas.pull_request import (
+    Check,
+    PullRequest,
+    PullRequestDetail,
+    PullRequestFile,
+    PullRequestReview,
+    TimelineEvent,
+)
 from app.schemas.repository import Repository
 from app.services.merge_rules import aggregate_checks_state, evaluate_merge_eligibility
 
@@ -67,26 +82,109 @@ def pull_request_to_schema(pr: PullRequestRecord, *, is_demo: bool) -> PullReque
     )
 
 
-async def get_repositories(provider: Provider) -> list[Repository]:
-    """Dépôts disponibles auprès du fournisseur."""
-    records = await provider.list_repositories()
+async def get_repositories(provider: Provider, *, refresh: bool = False) -> list[Repository]:
+    """Dépôts disponibles auprès du fournisseur (mise en cache TTL)."""
+    records: list[RepositoryRecord] = await get_or_load(
+        (provider.name, "repositories"),
+        get_settings().cache_ttl_seconds,
+        provider.list_repositories,
+        refresh=refresh,
+    )
     return [repository_to_schema(repository, is_demo=provider.is_demo) for repository in records]
 
 
 async def get_pull_requests(
-    provider: Provider, repository_full_name: str | None = None
+    provider: Provider,
+    repository_full_name: str | None = None,
+    *,
+    refresh: bool = False,
 ) -> list[PullRequest]:
-    """Pull requests disponibles auprès du fournisseur."""
-    records: list[PullRequestRecord] = await provider.list_pull_requests(repository_full_name)
+    """Pull requests disponibles auprès du fournisseur (mise en cache TTL)."""
+    records: list[PullRequestRecord] = await get_or_load(
+        (provider.name, "pull_requests", repository_full_name),
+        get_settings().cache_ttl_seconds,
+        lambda: provider.list_pull_requests(repository_full_name),
+        refresh=refresh,
+    )
     return [pull_request_to_schema(pr, is_demo=provider.is_demo) for pr in records]
 
 
-async def get_combined_data(
+def pull_request_detail_to_schema(
+    pr: PullRequestDetailRecord, *, is_demo: bool
+) -> PullRequestDetail:
+    """Convertit une pull request détaillée du fournisseur en schéma d'API."""
+    base = pull_request_to_schema(pr, is_demo=is_demo)
+    return PullRequestDetail(
+        **base.model_dump(),
+        body=pr.body,
+        files=[PullRequestFile.model_validate(item.model_dump()) for item in pr.files],
+        reviews=[PullRequestReview.model_validate(item.model_dump()) for item in pr.reviews],
+        timeline=[TimelineEvent.model_validate(item.model_dump()) for item in pr.timeline],
+    )
+
+
+async def get_pull_request(
     provider: Provider,
+    repository_full_name: str,
+    number: int,
+    *,
+    refresh: bool = False,
+) -> PullRequestDetail:
+    """Fiche détaillée d'une pull request (mise en cache TTL)."""
+    record: PullRequestDetailRecord = await get_or_load(
+        (provider.name, "pull_request", repository_full_name, number),
+        get_settings().cache_ttl_seconds,
+        lambda: provider.get_pull_request(repository_full_name, number),
+        refresh=refresh,
+    )
+    return pull_request_detail_to_schema(record, is_demo=provider.is_demo)
+
+
+def issue_to_schema(issue: IssueRecord, *, is_demo: bool) -> Issue:
+    """Convertit une issue du fournisseur en schéma d'API."""
+    return Issue(
+        id=issue.id,
+        number=issue.number,
+        repository_full_name=issue.repository_full_name,
+        title=issue.title,
+        author=issue.author,
+        state=issue.state,
+        is_pull_request=issue.is_pull_request,
+        created_at=issue.created_at,
+        updated_at=issue.updated_at,
+        html_url=issue.html_url,
+        is_demo=is_demo,
+    )
+
+
+async def get_issues(
+    provider: Provider,
+    repository_full_name: str | None = None,
+    state: str | None = None,
+    *,
+    refresh: bool = False,
+) -> list[Issue]:
+    """Issues disponibles auprès du fournisseur (mise en cache TTL)."""
+    records: list[IssueRecord] = await get_or_load(
+        (provider.name, "issues", repository_full_name, state),
+        get_settings().cache_ttl_seconds,
+        lambda: provider.list_issues(repository_full_name, state=state),
+        refresh=refresh,
+    )
+    return [issue_to_schema(issue, is_demo=provider.is_demo) for issue in records]
+
+
+async def get_combined_data(
+    provider: Provider, *, refresh: bool = False
 ) -> tuple[list[RepositoryRecord], list[PullRequestRecord]]:
     """Récupère dépôts et pull requests via le contrat d'intégration.
 
     Cette fonction existe pour que la couche API reste indépendante de la
-    mécanique d'agrégation du fournisseur.
+    mécanique d'agrégation du fournisseur. Le résultat est mis en cache TTL.
     """
-    return await collect(provider)
+    return await get_or_load(
+        (provider.name, "combined"),
+        get_settings().cache_ttl_seconds,
+        lambda: collect(provider),
+        refresh=refresh,
+    )

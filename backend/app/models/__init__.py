@@ -1,5 +1,5 @@
 """Modèles ORM exposés pour l'import."""
 
-from app.models.entities import AuditEvent, AutomationRule, RepositoryConfig
+from app.models.entities import AuditEvent, AutomationRule, RepositoryConfig, SystemSetting
 
-__all__ = ["AuditEvent", "AutomationRule", "RepositoryConfig"]
+__all__ = ["AuditEvent", "AutomationRule", "RepositoryConfig", "SystemSetting"]
