@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./repoflow.db"
     auto_create_tables: bool = True
 
+    # Réglages de pool SQLAlchemy (PostgreSQL et autres bases non-SQLite).
+    db_pool_pre_ping: bool = True
+    db_pool_size: int = Field(default=5, ge=1)
+    db_max_overflow: int = Field(default=10, ge=0)
+
     # Durée de mise en cache mémoire des données du fournisseur (secondes).
     # 0 désactive le cache. Le cache est invalidé par ``?refresh=true``.
     cache_ttl_seconds: int = Field(default=30, ge=0)
@@ -60,6 +65,25 @@ class Settings(BaseSettings):
     # activée tant que les garde-fous serveur ne sont pas en place.
     auto_merge_enabled_globally: bool = False
     kill_switch_engaged: bool = False
+
+    # Worker d'analyse périodique (désactivé par défaut).
+    worker_enabled: bool = False
+    worker_interval_seconds: int = Field(default=300, ge=1)
+
+    # Observabilité.
+    # Identifiant de corrélation et journal d'accès : toujours actifs.
+    # Exposition des métriques (``/api/metrics``).
+    metrics_enabled: bool = True
+
+    # Durcissement sécurité.
+    security_headers_enabled: bool = True
+    # En-tête HSTS : à activer uniquement en HTTPS (désactivé en développement).
+    hsts_enabled: bool = False
+    # Limitation de débit par adresse IP (fenêtre fixe, en mémoire). Désactivé
+    # par défaut ; à activer derrière un proxy qui définit l'adresse réelle.
+    rate_limit_enabled: bool = False
+    rate_limit_requests: int = Field(default=120, ge=1)
+    rate_limit_window_seconds: int = Field(default=60, ge=1)
 
     @field_validator("cors_origins", mode="before")
     @classmethod

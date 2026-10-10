@@ -7,8 +7,11 @@ RepoFlow sait fonctionner de deux manières, sélectionnées par
 - `github` : données réelles lues depuis l'API GitHub, **token requis côté
   serveur**.
 
-L'intégration GitHub est **strictement en lecture seule** dans cette version :
-aucune écriture (commentaire, label, fusion) n'est effectuée.
+L'intégration GitHub lit les données (dépôts, PR, checks, issues, revues).
+Une **seule** écriture est possible — la fusion `squash` d'une pull request —
+et elle est **désactivée par défaut** : elle n'a lieu que si une règle
+d'automatisation l'autorise explicitement, que la PR est éligible et que
+l'arrêt d'urgence est désengagé (voir « Fusion contrôlée » ci-dessous).
 
 ## Interface abstraite
 
@@ -25,6 +28,9 @@ class Provider(Protocol):
     async def list_pull_requests(
         self, repository_full_name: str | None = None
     ) -> list[PullRequestRecord]: ...
+    async def merge_pull_request(
+        self, repository_full_name: str, number: int, *, merge_method: str = "squash"
+    ) -> MergeResultRecord: ...
 ```
 
 `DemoProvider` et `GithubProvider` implémentent ce contrat. La sélection se
@@ -61,7 +67,9 @@ Le principe du **moindre privilège** doit s'appliquer :
 - **Métadonnées** : lecture (obligatoire).
 - **Contents** : lecture seule.
 - **Issues** : lecture seule pour l'affichage.
-- **Pull requests** : lecture seule.
+- **Pull requests** : lecture ; écriture **uniquement** si la fusion automatique
+  est utilisée (`REPOFLOW_AUTO_MERGE_ENABLED_GLOBALLY=true`). En lecture seule,
+  cette permission n'est pas nécessaire.
 - **Checks / Commit statuses** : lecture seule.
 - **Administration / protections de branche** : à éviter. **Aucun contournement
   administrateur** des protections de branche ne doit être utilisé.
@@ -79,6 +87,7 @@ Le principe du **moindre privilège** doit s'appliquer :
 | Revues | `GET /repos/{owner}/{repo}/pulls/{number}/reviews` |
 | Fichiers modifiés | `GET /repos/{owner}/{repo}/pulls/{number}/files` |
 | Chronologie | `GET /repos/{owner}/{repo}/issues/{number}/timeline` |
+| Fusion `squash` (écriture, conditionnelle) | `PUT /repos/{owner}/{repo}/pulls/{number}/merge` |
 
 ## Points techniques
 
@@ -140,8 +149,26 @@ Le principe du **moindre privilège** doit s'appliquer :
   `httpcore` sont forcés au niveau `WARNING`.
 - En cas de configuration `github` sans token, l'application répond
   `503 not_configured` avec un message explicite.
-- La fusion automatique reste désactivée : l'évaluation d'éligibilité est en
-  lecture seule.
+- La fusion automatique est désactivée par défaut : sans règle activée *et*
+  autorisation globale, aucune écriture n'est effectuée.
+
+## Fusion contrôlée
+
+Une fusion `squash` n'est déclenchée que par le worker (`app/worker.py`) et
+uniquement lorsque **toutes** les conditions suivantes sont réunies :
+
+1. la PR est ouverte, non brouillon, sans conflit ;
+2. tous les checks obligatoires sont `success` (un check inconnu ne suffit pas) ;
+3. le nombre d'approbations requises par la règle est atteint ;
+4. la branche cible **est la branche par défaut** du dépôt (protection
+   prudente) ;
+5. `auto_merge_enabled` vaut vrai sur la règle ;
+6. `REPOFLOW_AUTO_MERGE_ENABLED_GLOBALLY=true` ;
+7. l'arrêt d'urgence global est désengagé.
+
+Toute décision (fusion réussie, blocage, report, erreur) est enregistrée dans
+le journal d'audit (`GET /api/v1/audit`). Le fournisseur de démonstration
+simule la fusion en mémoire, sans modifier de données réelles.
 
 ## Coût des requêtes
 

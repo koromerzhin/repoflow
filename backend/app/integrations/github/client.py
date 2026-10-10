@@ -117,6 +117,18 @@ class GitHubClient:
         self._raise_for_status(response)
         return response.json()
 
+    async def put(self, path: str, json: dict[str, Any] | None = None) -> Any:
+        """Effectue une requête PUT et renvoie le JSON décodé.
+
+        Utilisée uniquement pour les actions d'écriture explicitement
+        autorisées (ex. fusion), jamais par défaut.
+        """
+        response = await self._client.put(path, json=json)
+        self._raise_for_status(response)
+        if response.status_code == 204 or not response.content:
+            return {}
+        return response.json()
+
     async def get_paginated(
         self,
         path: str,

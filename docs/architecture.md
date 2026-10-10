@@ -25,13 +25,14 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 | Répertoire | Responsabilité |
 | --- | --- |
 | `app/api/` | Routes HTTP et dépendances FastAPI. Aucune logique métier. |
-| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`) et `health`. |
+| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`, `configs`, `automation`, `audit`) et `health`. |
 | `app/core/` | Configuration, logging, gestion des erreurs, cache TTL mémoire. |
 | `app/db/` | Moteur, sessions et initialisation de la base. |
 | `app/models/` | Modèles ORM SQLAlchemy 2.x. |
 | `app/schemas/` | Modèles Pydantic de validation et de réponse. |
-| `app/services/` | Règles métier : agrégation des checks, éligibilité de fusion, tableau de bord. |
+| `app/services/` | Règles métier : agrégation des checks, éligibilité de fusion, tableau de bord, configuration, analyse, audit, garde-fous système. |
 | `app/integrations/github/` | Intégration GitHub derrière une interface abstraite. |
+| `app/worker.py` | Worker d'analyse périodique (intégré à l'API ou en processus séparé). |
 
 ### Flux de données
 
@@ -54,7 +55,30 @@ le fournisseur GitHub réel n'impacte ni les services ni les routes.
 - `evaluate_merge_eligibility` : évaluation **en lecture seule**. Une PR en
   brouillon, non approuvée, en conflit, non ouverte, ou dont un check
   obligatoire n'est pas réussi est bloquée. **Un check inconnu n'est jamais
-  considéré comme réussi.**
+  considéré comme réussi.** Le nombre d'approbations requis et l'exigence de
+  checks verts sont paramétrables par règle.
+- `analysis_service` : évalue les règles et, si et seulement si toutes les
+  conditions sont réunies, déclenche une fusion `squash`. La décision suit un
+  ordre strict : arrêt d'urgence → autorisation globale → règle.
+- `config_service` : CRUD des dépôts suivis et des règles, avec validation
+  stricte des entrées (le client n'est jamais source de vérité).
+- `audit_service` : journal immuable des analyses et décisions.
+
+### Analyse et fusion contrôlée
+
+Le worker (`app/worker.py`) exécute périodiquement `run_analysis`. Pour chaque
+dépôt suivi et activé :
+
+1. les pull requests ouvertes sont récupérées puis filtrées par la règle qui
+   correspond à leur branche cible ;
+2. chaque PR est évaluée (`evaluate_pr_for_rule`) : éligibilité, approbations,
+   checks, et **branche cible = branche par défaut** du dépôt ;
+3. une fusion `squash` n'est tentée que si la règle et l'autorisation globale
+   sont actives et que l'arrêt d'urgence est désengagé ;
+4. chaque décision (fusion, blocage, report, erreur) est journalisée.
+
+Sans configuration explicite, **aucune fusion n'a lieu** : le comportement par
+défaut est sûr.
 
 ## Frontend
 
@@ -74,19 +98,47 @@ et de **contenu**.
 
 ## Base de données
 
-- SQLite en développement et pour la première version.
+- SQLite en développement ; **PostgreSQL** possible en production
+  (`pip install -e ".[postgres]"` et `REPOFLOW_DATABASE_URL` en
+  `postgresql+psycopg://…`).
 - Migrations gérées par **Alembic** (`backend/alembic/`).
-- Tables : `repository_configs`, `automation_rules`, `audit_events`.
+- Tables : `repository_configs`, `automation_rules`, `audit_events`,
+  `system_settings`.
+- Le moteur SQLAlchemy ajuste ses options selon le dialecte : SQLite
+  (`check_same_thread=False`), autres bases (`pool_pre_ping`, taille de pool
+  configurables via `REPOFLOW_DB_POOL_*`).
 - En développement, `REPOFLOW_AUTO_CREATE_TABLES=true` crée les tables au
   démarrage ; en production, exécuter `alembic upgrade head`.
 
-Les données GitHub (issues, PR, checks) ne sont **pas** persistées dans cette
-première version : elles sont servies à la demande par le fournisseur.
+Les données GitHub (issues, PR, checks) ne sont **pas** persistées : elles sont
+servies à la demande par le fournisseur. Seules la configuration, l'état des
+automatisations et le journal d'audit sont stockés.
+
+## Couches transverses (observabilité et sécurité)
+
+Les middlewares FastAPI sont empilés (du plus interne au plus externe) :
+
+1. **Limitation de débit** (`app/core/security.py`) — fenêtre fixe en mémoire,
+   clé = adresse IP. Désactivée par défaut ; réponse `429` au-delà du seuil.
+2. **En-têtes de sécurité** (`app/core/security.py`) — `X-Content-Type-Options`,
+   `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, CSP
+   sur les chemins `/api`, HSTS en contexte HTTPS uniquement.
+3. **Métriques** (`app/core/metrics.py`) — registre autonome, exposition
+   Prometheus sur `GET /api/metrics` (libellés par méthode, route et statut ;
+   les segments dynamiques sont normalisés via le modèle de route).
+4. **Contexte de requête** (`app/core/request_context.py`) — identifiant de
+   corrélation `X-Request-ID` (repris du client ou généré, sanitizé), propagé
+   dans les journaux par `RequestIdFilter`, renvoyé au client ; journal
+   d'accès structuré (`méthode chemin → statut (durée)`).
+5. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
+   aussi les en-têtes CORS.
+
+À l'exception de la limitation de débit (mémoire, par processus), ces couches
+sont sans état et conveniennent à une mise à l'échelle horizontale.
 
 ## Évolutions prévues
 
-- **Worker d'analyse périodique** : service séparé réutilisant l'image
-  backend, chargé de scruter les dépôts et d'évaluer les règles de fusion.
-- **Fusion automatique** : jamais activée par défaut, toujours contrôlée côté
-  serveur, avec historique d'audit.
-- **Webhooks GitHub** : ingestion d'événements en temps réel.
+- **Webhooks GitHub** : ingestion d'événements en temps réel en complément du
+  worker périodique.
+- **Stockage partagé du limiteur de débit** (Redis) pour une mise à l'échelle
+  multi-processus.

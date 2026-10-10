@@ -156,6 +156,15 @@ def _handler(request: httpx.Request) -> httpx.Response:
         )
     if path == "/repos/acme/api/issues":
         return httpx.Response(200, json=[])
+    if path == "/repos/acme/web-app/pulls/10/merge" and request.method == "PUT":
+        return httpx.Response(
+            200,
+            json={
+                "merged": True,
+                "sha": "deadbeef",
+                "message": "Pull Request successfully merged",
+            },
+        )
     return httpx.Response(404, json={"message": f"non simulé: {path}"})
 
 
@@ -256,6 +265,25 @@ async def test_get_pull_request_inconnue(provider: GithubProvider) -> None:
     try:
         with pytest.raises(NotFoundError):
             await provider.get_pull_request("acme/inconnu", 1)
+    finally:
+        await provider.aclose()
+
+
+async def test_merge_pull_request(provider: GithubProvider) -> None:
+    result = await provider.merge_pull_request("acme/web-app", 10)
+    try:
+        assert result.merged is True
+        assert result.sha == "deadbeef"
+    finally:
+        await provider.aclose()
+
+
+async def test_merge_repository_invalide(provider: GithubProvider) -> None:
+    from app.core.errors import NotFoundError
+
+    try:
+        with pytest.raises(NotFoundError):
+            await provider.merge_pull_request("invalide", 10)
     finally:
         await provider.aclose()
 

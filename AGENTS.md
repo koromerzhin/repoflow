@@ -13,7 +13,7 @@ pip install -e ".[dev]"
 
 ruff check .            # lint — doit passer
 ruff format .           # formatage (ou --check en CI)
-pytest                  # tests — doivent passer
+pytest                  # tests + couverture (seuil : 90 %)
 uvicorn app.main:app --reload --port 8000
 alembic revision --autogenerate -m "description"
 alembic upgrade head
@@ -26,6 +26,7 @@ npm install
 npm run lint            # ESLint — doit passer
 npm run typecheck       # TypeScript strict — doit passer
 npm test                # Vitest
+npm run test:coverage   # Vitest + couverture (seuils : lignes 80 %, branches 65 %)
 npm run build           # build de production
 npm run dev
 ```

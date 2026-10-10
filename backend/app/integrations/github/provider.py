@@ -13,6 +13,7 @@ from typing import Protocol
 
 from app.integrations.github.types import (
     IssueRecord,
+    MergeResultRecord,
     PullRequestDetailRecord,
     PullRequestRecord,
     RepositoryRecord,
@@ -41,6 +42,14 @@ class Provider(Protocol):
         repository_full_name: str | None = None,
         state: str | None = None,
     ) -> Awaitable[list[IssueRecord]]: ...
+
+    async def merge_pull_request(
+        self,
+        repository_full_name: str,
+        number: int,
+        *,
+        merge_method: str = "squash",
+    ) -> Awaitable[MergeResultRecord]: ...
 
 
 async def collect(provider: Provider) -> tuple[list[RepositoryRecord], list[PullRequestRecord]]:

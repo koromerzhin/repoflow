@@ -1,14 +1,18 @@
 # RepoFlow — orchestration Docker Compose
 #
 # Monolithe modulaire : un service backend (FastAPI) et un service frontend
-# (Vite) pour le développement. Un worker d'analyse périodique pourra être
-# ajouté ultérieurement comme service séparé partageant la même image backend.
+# (Vite) pour le développement. Le worker d'analyse partage l'image backend
+# (Phase 4) ; un PostgreSQL optionnel est proposé via le profil "postgres".
 #
 # Usage :
 #   cp .env.example .env
 #   docker compose up --build
 #   Backend  : http://localhost:8000
 #   Frontend : http://localhost:5173
+#
+# Avec PostgreSQL (production) :
+#   REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
+#   docker compose --profile postgres up --build
 
 services:
   backend:
@@ -28,6 +32,27 @@ services:
       - "8000:8000"
     restart: unless-stopped
 
+  # Base de données PostgreSQL optionnelle (profil "postgres").
+  # Activer uniquement avec --profile postgres ; le backend reste sur SQLite
+  # par défaut et utilise PostgreSQL si REPOFLOW_DATABASE_URL le pointe ici.
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: repoflow
+      POSTGRES_PASSWORD: ${REPOFLOW_DB_PASSWORD:-repoflow}
+      POSTGRES_DB: repoflow
+    volumes:
+      - repoflow-pg-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U repoflow -d repoflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -42,3 +67,4 @@ services:
 
 volumes:
   repoflow-data:
+  repoflow-pg-data:

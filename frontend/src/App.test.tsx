@@ -36,14 +36,15 @@ describe('App', () => {
     }
   })
 
-  it('affiche un état « À venir » pour les pages non implémentées', () => {
+  it('affiche la page des automatisations', () => {
     render(
       <MemoryRouter initialEntries={['/automations']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(screen.getByText('À venir')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Automatisations' })).toBeInTheDocument()
+    expect(screen.getByText('Garde-fous')).toBeInTheDocument()
   })
 
   it('affiche une page 404 pour une route inconnue', () => {

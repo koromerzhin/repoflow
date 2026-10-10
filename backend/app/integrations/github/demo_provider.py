@@ -12,6 +12,7 @@ from app.core.errors import NotFoundError
 from app.integrations.github.types import (
     CheckRecord,
     IssueRecord,
+    MergeResultRecord,
     PullRequestDetailRecord,
     PullRequestFileRecord,
     PullRequestRecord,
@@ -604,3 +605,42 @@ class DemoProvider:
         if state is not None:
             issues = [issue for issue in issues if issue.state.value == state]
         return issues
+
+    async def merge_pull_request(
+        self,
+        repository_full_name: str,
+        number: int,
+        *,
+        merge_method: str = "squash",
+    ) -> MergeResultRecord:
+        """Simule une fusion (mode démonstration).
+
+        La pull request est marquée fusionnée en mémoire. Aucune donnée réelle
+        n'est modifiée.
+        """
+        self._ensure_built()
+        assert self._data is not None
+        pr = next(
+            (
+                item
+                for item in self._data[1]
+                if item.repository_full_name == repository_full_name and item.number == number
+            ),
+            None,
+        )
+        if pr is None:
+            raise NotFoundError(
+                f"Pull request #{number} introuvable pour {repository_full_name}.",
+                code="pull_request_not_found",
+            )
+        if pr.state != PullRequestState.OPEN:
+            return MergeResultRecord(
+                merged=False,
+                message=f"Pull request #{number} non ouverte (état {pr.state.value}).",
+            )
+        pr.state = PullRequestState.MERGED
+        return MergeResultRecord(
+            merged=True,
+            message=f"Pull request #{number} fusionnée ({merge_method}, démo).",
+            sha=f"demo-merge-{pr.number}",
+        )

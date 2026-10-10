@@ -24,6 +24,7 @@ from app.integrations.github.mapping import (
 from app.integrations.github.types import (
     CheckRecord,
     IssueRecord,
+    MergeResultRecord,
     PullRequestDetailRecord,
     PullRequestRecord,
     RepositoryRecord,
@@ -184,3 +185,37 @@ class GithubProvider:
         combined_status = await self._client.get(f"/repos/{owner}/{name}/commits/{ref}/status")
         statuses = combined_status.get("statuses", []) if isinstance(combined_status, dict) else []
         return map_combined_checks(check_runs, statuses)
+
+    async def merge_pull_request(
+        self,
+        repository_full_name: str,
+        number: int,
+        *,
+        merge_method: str = "squash",
+    ) -> MergeResultRecord:
+        """Fusionne une pull request (action d'écriture).
+
+        Cette méthode n'est appelée que par le worker et uniquement lorsque
+        l'automatisation est explicitement activée (règle + global) et que
+        l'arrêt d'urgence est désengagé. Elle échoue proprement sinon.
+        """
+        owner, _, name = repository_full_name.partition("/")
+        if not owner or not name:
+            raise NotFoundError(
+                "Nom de dépôt invalide ; format attendu : « owner/name ».",
+                code="invalid_repository",
+            )
+        payload = await self._client.put(
+            f"/repos/{owner}/{name}/pulls/{number}/merge",
+            json={"merge_method": merge_method},
+        )
+        if isinstance(payload, dict) and payload.get("merged"):
+            return MergeResultRecord(
+                merged=True,
+                message=str(payload.get("message") or "Pull request fusionnée."),
+                sha=str(payload.get("sha")) if payload.get("sha") else None,
+            )
+        return MergeResultRecord(
+            merged=False,
+            message=str((payload or {}).get("message") or "Fusion refusée par GitHub."),
+        )

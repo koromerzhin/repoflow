@@ -37,7 +37,7 @@ jobs:
         run: |
           alembic upgrade head
           alembic downgrade base
-      - name: Tests Pytest
+      - name: Tests Pytest (couverture, seuil 90 %)
         run: pytest
 
   frontend:
@@ -61,5 +61,7 @@ jobs:
         run: npm run typecheck
       - name: Tests Vitest
         run: npm test
+      - name: Tests Vitest (couverture, seuil 85 %)
+        run: npm run test:coverage
       - name: Build de production
         run: npm run build

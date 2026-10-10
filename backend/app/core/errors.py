@@ -34,6 +34,13 @@ class NotFoundError(AppError):
     code = "not_found"
 
 
+class ConflictError(AppError):
+    """Conflit de ressource (ex. doublon de configuration)."""
+
+    status_code = status.HTTP_409_CONFLICT
+    code = "conflict"
+
+
 class ProviderError(AppError):
     """Erreur provenant d'un fournisseur externe (GitHub, démo, ...)."""
 
@@ -48,6 +55,20 @@ class NotConfiguredError(AppError):
 
 def _error_payload(code: str, message: str) -> dict[str, object]:
     return {"error": {"code": code, "message": message}}
+
+
+def _validation_details(exc: RequestValidationError) -> list[dict[str, object]]:
+    """Détails d'erreur sérialisables (les valeurs ``ctx`` peuvent contenir des exceptions)."""
+    details: list[dict[str, object]] = []
+    for error in exc.errors():
+        item: dict[str, object] = {
+            key: error[key] for key in ("loc", "msg", "type") if key in error
+        }
+        context = error.get("ctx")
+        if isinstance(context, dict):
+            item["ctx"] = {key: str(value) for key, value in context.items()}
+        details.append(item)
+    return details
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -68,7 +89,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                 "error": {
                     "code": "validation_error",
                     "message": "La requête est invalide.",
-                    "details": exc.errors(),
+                    "details": _validation_details(exc),
                 }
             },
         )

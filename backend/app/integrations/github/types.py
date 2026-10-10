@@ -120,3 +120,11 @@ class PullRequestDetailRecord(PullRequestRecord):
     files: list[PullRequestFileRecord] = Field(default_factory=list)
     reviews: list[PullRequestReviewRecord] = Field(default_factory=list)
     timeline: list[TimelineEventRecord] = Field(default_factory=list)
+
+
+class MergeResultRecord(BaseModel):
+    """Résultat d'une tentative de fusion d'une pull request."""
+
+    merged: bool
+    message: str
+    sha: str | None = None

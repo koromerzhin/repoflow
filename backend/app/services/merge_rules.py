@@ -9,13 +9,14 @@ Un check CI réussi n'est jamais, à lui seul, une autorisation de fusionner.
 
 from __future__ import annotations
 
-from app.integrations.github.types import CheckRecord, PullRequestRecord
+from app.integrations.github.types import CheckRecord, PullRequestRecord, PullRequestReviewRecord
 from app.schemas.pull_request import (
     CheckState,
     MergeBlocker,
     MergeEligibility,
     PullRequestState,
     ReviewDecision,
+    ReviewState,
 )
 
 
@@ -40,10 +41,30 @@ def aggregate_checks_state(checks: list[CheckRecord]) -> CheckState:
     return CheckState.SUCCESS
 
 
-def evaluate_merge_eligibility(pr: PullRequestRecord) -> MergeEligibility:
+def count_approved_reviews(reviews: list[PullRequestReviewRecord]) -> int:
+    """Compte les relecteurs distincts dont la dernière revue est approuvée.
+
+    Seule la dernière revue de chaque auteur compte, afin qu'un changement
+    d'avis soit pris en compte.
+    """
+    latest: dict[str, ReviewState] = {}
+    for review in reviews:
+        latest[review.author] = review.state
+    return sum(1 for state in latest.values() if state == ReviewState.APPROVED)
+
+
+def evaluate_merge_eligibility(
+    pr: PullRequestRecord,
+    *,
+    required_approvals: int = 1,
+    require_green_checks: bool = True,
+    approved_count: int | None = None,
+) -> MergeEligibility:
     """Évalue (sans exécuter) si la pull request remplit les conditions.
 
     Ne considère jamais un check échoué, en cours ou inconnu comme un succès.
+    ``required_approvals``, ``require_green_checks`` et ``approved_count``
+    permettent d'appliquer les contraintes d'une règle d'automatisation.
     """
     blockers: list[MergeBlocker] = []
 
@@ -63,22 +84,32 @@ def evaluate_merge_eligibility(pr: PullRequestRecord) -> MergeEligibility:
                 message="La pull request présente des conflits de fusion.",
             )
         )
-    if pr.review_decision != ReviewDecision.APPROVED:
-        blockers.append(
-            MergeBlocker(
-                code="not_approved",
-                message="Les approbations requises ne sont pas réunies.",
-            )
-        )
-    for check in pr.checks:
-        if not check.required:
-            continue
-        if check.state != CheckState.SUCCESS:
+    if required_approvals > 0:
+        approved = approved_count if approved_count is not None else _approved_from_decision(pr)
+        if approved < required_approvals:
             blockers.append(
                 MergeBlocker(
-                    code="check_not_success",
-                    message=f"Le check obligatoire « {check.name} » n'est pas réussi.",
+                    code="not_approved",
+                    message=(
+                        f"Approbations insuffisantes : {approved}/{required_approvals} requises."
+                    ),
                 )
             )
+    if require_green_checks:
+        for check in pr.checks:
+            if not check.required:
+                continue
+            if check.state != CheckState.SUCCESS:
+                blockers.append(
+                    MergeBlocker(
+                        code="check_not_success",
+                        message=f"Le check obligatoire « {check.name} » n'est pas réussi.",
+                    )
+                )
 
     return MergeEligibility(eligible=len(blockers) == 0, blockers=blockers)
+
+
+def _approved_from_decision(pr: PullRequestRecord) -> int:
+    """Approximation du nombre d'approbations à partir de la décision agrégée."""
+    return 1 if pr.review_decision == ReviewDecision.APPROVED else 0
