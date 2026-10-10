@@ -10,18 +10,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_v1_router
 from app.api.v1.routes.health import router as health_router
 from app.core.config import get_settings
-from app.core.errors import register_exception_handlers
+from app.core.errors import NotConfiguredError, register_exception_handlers
 from app.core.logging import configure_logging, get_logger
 from app.db.init_db import create_all
+from app.integrations.github.factory import get_provider
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Cycle de vie : initialisation propre au démarrage."""
+    """Cycle de vie : initialisation au démarrage et fermeture à l'arrêt."""
     settings = get_settings()
     if settings.auto_create_tables:
         create_all()
     yield
+    # Fermeture propre du client HTTP sortant du fournisseur, si présent.
+    try:
+        provider = get_provider()
+    except NotConfiguredError:
+        return
+    aclose = getattr(provider, "aclose", None)
+    if aclose is not None:
+        await aclose()
 
 
 def create_app() -> FastAPI:

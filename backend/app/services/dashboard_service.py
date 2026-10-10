@@ -51,9 +51,9 @@ def _recent_activity(pull_requests: list[PullRequestRecord]) -> list[ActivityIte
     return items
 
 
-async def build_dashboard(provider: Provider) -> DashboardResponse:
+async def build_dashboard(provider: Provider, *, refresh: bool = False) -> DashboardResponse:
     """Construit la réponse du tableau de bord à partir du fournisseur."""
-    repositories, pull_requests = await get_combined_data(provider)
+    repositories, pull_requests = await get_combined_data(provider, refresh=refresh)
     return DashboardResponse(
         generated_at=datetime.now(UTC),
         data_source=provider.name,

@@ -31,6 +31,10 @@ def configure_logging(settings: Settings) -> None:
                 "uvicorn": {"level": settings.log_level.upper(), "propagate": True},
                 "uvicorn.error": {"level": settings.log_level.upper(), "propagate": True},
                 "uvicorn.access": {"level": "WARNING", "propagate": True},
+                # Évite toute journalisation verbeuse des requêtes HTTP sortantes
+                # (les en-têtes d'authentification ne doivent jamais apparaître).
+                "httpx": {"level": "WARNING", "propagate": True},
+                "httpcore": {"level": "WARNING", "propagate": True},
             },
         }
     )

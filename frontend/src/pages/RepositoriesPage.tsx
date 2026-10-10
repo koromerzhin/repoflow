@@ -2,18 +2,23 @@ import { ExternalLink, Lock, Globe } from 'lucide-react'
 
 import { AsyncState } from '@/components/AsyncState'
 import { PageHeader } from '@/components/PageHeader'
-import { useAsync } from '@/hooks/useAsync'
+import { RefreshButton } from '@/components/RefreshButton'
+import { useResource } from '@/hooks/useAsync'
 import { formatDateTime } from '@/lib/status'
 import { getRepositories } from '@/services/apiClient'
 
 export function RepositoriesPage() {
-  const { data, error, loading, reload } = useAsync(getRepositories, [])
+  const { data, error, loading, reload, refresh } = useResource(
+    (options, signal) => getRepositories(signal, { refresh: options.refresh }),
+    [],
+  )
 
   return (
     <div>
       <PageHeader
         title="Dépôts"
         description="Dépôts GitHub suivis par RepoFlow. Aucun clonage local n'est nécessaire."
+        actions={<RefreshButton onClick={refresh} loading={loading} />}
       />
 
       <AsyncState

@@ -11,7 +11,12 @@ from __future__ import annotations
 from collections.abc import Awaitable, Iterable
 from typing import Protocol
 
-from app.integrations.github.types import PullRequestRecord, RepositoryRecord
+from app.integrations.github.types import (
+    IssueRecord,
+    PullRequestDetailRecord,
+    PullRequestRecord,
+    RepositoryRecord,
+)
 
 
 class Provider(Protocol):
@@ -26,6 +31,16 @@ class Provider(Protocol):
     async def list_pull_requests(
         self, repository_full_name: str | None = None
     ) -> Awaitable[list[PullRequestRecord]]: ...
+
+    async def get_pull_request(
+        self, repository_full_name: str, number: int
+    ) -> Awaitable[PullRequestDetailRecord]: ...
+
+    async def list_issues(
+        self,
+        repository_full_name: str | None = None,
+        state: str | None = None,
+    ) -> Awaitable[list[IssueRecord]]: ...
 
 
 async def collect(provider: Provider) -> tuple[list[RepositoryRecord], list[PullRequestRecord]]:

@@ -25,8 +25,8 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 | Répertoire | Responsabilité |
 | --- | --- |
 | `app/api/` | Routes HTTP et dépendances FastAPI. Aucune logique métier. |
-| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`) et `health`. |
-| `app/core/` | Configuration, logging, gestion des erreurs. |
+| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`) et `health`. |
+| `app/core/` | Configuration, logging, gestion des erreurs, cache TTL mémoire. |
 | `app/db/` | Moteur, sessions et initialisation de la base. |
 | `app/models/` | Modèles ORM SQLAlchemy 2.x. |
 | `app/schemas/` | Modèles Pydantic de validation et de réponse. |
@@ -37,7 +37,9 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 
 1. La route appelle un **service** via une dépendance FastAPI.
 2. Le service interroge le **fournisseur** (`Provider`) pour obtenir des
-   enregistrements de domaine (`RepositoryRecord`, `PullRequestRecord`).
+   enregistrements de domaine (`RepositoryRecord`, `PullRequestRecord`,
+   `IssueRecord`), les résultats étant mis en cache mémoire avec un TTL
+   configurable (`REPOFLOW_CACHE_TTL_SECONDS`, contournable via `?refresh=true`).
 3. Le service applique les **règles métier** (`merge_rules`) et convertit les
    enregistrements en **schémas d'API**.
 4. La route sérialise la réponse.

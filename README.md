@@ -5,9 +5,11 @@ GitHub**. Elle permet de suivre plusieurs dépôts distants sans les cloner,
 de consulter leurs issues et pull requests, de contrôler l'état des checks CI
 et de préparer la fusion des pull requests selon des règles configurables.
 
-> **État du projet : socle initial (v0.1).** L'application fonctionne en
-> **mode démonstration** avec des données fictives clairement identifiées.
-> La connexion à GitHub et la fusion automatique ne sont pas encore actives.
+> **État du projet : v0.1.** L'application fonctionne par défaut en **mode
+> démonstration** avec des données fictives clairement identifiées. La
+> connexion à l'API GitHub réelle est disponible en **lecture seule** via
+> `REPOFLOW_GITHUB_PROVIDER=github` + `REPOFLOW_GITHUB_TOKEN`. La fusion
+> automatique n'est pas encore active.
 
 ## Fonctionnalités
 
@@ -18,9 +20,18 @@ et de préparer la fusion des pull requests selon des règles configurables.
 - Dépôts `GET /api/v1/repositories`.
 - Pull requests `GET /api/v1/pull-requests` (filtre par dépôt) avec état
   agrégé des checks et éligibilité de fusion **indicative**.
+- Issues `GET /api/v1/issues` (filtres par dépôt et par état) — les pull
+  requests sont exclues de cette liste.
+- Détail d'une pull request `GET /api/v1/pull-requests/{number}` : fichiers
+  modifiés, revues et timeline, avec page frontend dédiée.
+- Cache TTL mémoire des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`)
+  et rafraîchissement manuel via `?refresh=true` ou les boutons « Rafraîchir ».
 - Interface React sombre, en français, responsive : navigation, tableau de
-  bord, dépôts, pull requests, états de chargement / erreur / vide.
+  bord, dépôts, pull requests, détail de PR, issues, états de chargement /
+  erreur / vide.
 - Fournisseur de données abstrait (`demo` / `github`).
+- Connexion GitHub réelle **en lecture seule** (dépôts, PR, checks CI,
+  revues) avec pagination, gestion du rate limit et erreurs normalisées.
 - Base SQLite, migrations Alembic, historique d'audit et règles
   d'automatisation (désactivées par défaut).
 - Tests backend (Pytest) et frontend (Vitest + Testing Library).
@@ -28,8 +39,6 @@ et de préparer la fusion des pull requests selon des règles configurables.
 
 ### À venir
 
-- Connexion réelle à GitHub (GitHub App ou token fine-grained).
-- Consultation des issues.
 - Configuration des règles d'automatisation par dépôt et par branche.
 - Fusion automatique `squash` **contrôlée côté serveur** (désactivée par défaut).
 - Worker d'analyse périodique.

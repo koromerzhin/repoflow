@@ -2,6 +2,8 @@ import type {
   ApiErrorBody,
   DashboardResponse,
   HealthResponse,
+  IssueListResponse,
+  PullRequestDetail,
   PullRequestListResponse,
   RepositoryListResponse,
 } from '@/types/api'
@@ -67,29 +69,76 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   return (await response.json()) as T
 }
 
+export interface Refreshable {
+  refresh?: boolean
+}
+
+function buildQuery(params: Record<string, string | undefined>, refresh?: boolean): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value) {
+      search.set(key, value)
+    }
+  }
+  if (refresh) {
+    search.set('refresh', 'true')
+  }
+  const query = search.toString()
+  return query ? `?${query}` : ''
+}
+
 export function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return request<HealthResponse>('/health', signal)
 }
 
-export function getDashboard(signal?: AbortSignal): Promise<DashboardResponse> {
-  return request<DashboardResponse>('/v1/dashboard', signal)
+export function getDashboard(
+  signal?: AbortSignal,
+  options: Refreshable = {},
+): Promise<DashboardResponse> {
+  return request<DashboardResponse>(`/v1/dashboard${buildQuery({}, options.refresh)}`, signal)
 }
 
-export function getRepositories(signal?: AbortSignal): Promise<RepositoryListResponse> {
-  return request<RepositoryListResponse>('/v1/repositories', signal)
+export function getRepositories(
+  signal?: AbortSignal,
+  options: Refreshable = {},
+): Promise<RepositoryListResponse> {
+  return request<RepositoryListResponse>(
+    `/v1/repositories${buildQuery({}, options.refresh)}`,
+    signal,
+  )
 }
 
 export function getPullRequests(
-  params: { repository?: string } = {},
+  params: { repository?: string } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<PullRequestListResponse> {
-  const search = new URLSearchParams()
-  if (params.repository) {
-    search.set('repository', params.repository)
-  }
-  const query = search.toString()
   return request<PullRequestListResponse>(
-    `/v1/pull-requests${query ? `?${query}` : ''}`,
+    `/v1/pull-requests${buildQuery({ repository: params.repository }, params.refresh)}`,
+    signal,
+  )
+}
+
+export function getIssues(
+  params: { repository?: string; state?: 'open' | 'closed' | 'all' } & Refreshable = {},
+  signal?: AbortSignal,
+): Promise<IssueListResponse> {
+  return request<IssueListResponse>(
+    `/v1/issues${buildQuery(
+      { repository: params.repository, state: params.state },
+      params.refresh,
+    )}`,
+    signal,
+  )
+}
+
+export function getPullRequestDetail(
+  number: number,
+  repository: string,
+  signal?: AbortSignal,
+  options: Refreshable = {},
+): Promise<PullRequestDetail> {
+  return request<PullRequestDetail>(
+    `/v1/pull-requests/${number}${buildQuery({ repository }, options.refresh)}`,
     signal,
   )
 }

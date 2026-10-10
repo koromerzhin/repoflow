@@ -42,12 +42,19 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+pysqlite:///./repoflow.db"
     auto_create_tables: bool = True
 
+    # Durée de mise en cache mémoire des données du fournisseur (secondes).
+    # 0 désactive le cache. Le cache est invalidé par ``?refresh=true``.
+    cache_ttl_seconds: int = Field(default=30, ge=0)
+
     # Intégration GitHub.
     # ``demo`` n'exige aucun token : des données fictives sont servies.
-    # ``github`` nécessite un token et n'est pas encore implémenté.
+    # ``github`` nécessite un token et interroge l'API GitHub réelle.
     github_provider: ProviderName = "demo"
     github_token: SecretStr | None = None
     github_api_url: str = "https://api.github.com"
+    github_timeout: float = 30.0
+    github_per_page: int = Field(default=100, ge=1, le=100)
+    github_max_pages: int = Field(default=10, ge=1, le=100)
 
     # La fusion automatique est désactivée par défaut et ne doit pas être
     # activée tant que les garde-fous serveur ne sont pas en place.

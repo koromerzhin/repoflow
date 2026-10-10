@@ -15,7 +15,8 @@ router = APIRouter()
 async def repositories(
     provider: ProviderDep,
     limit: int = Query(default=100, ge=1, le=500),
+    refresh: bool = Query(default=False, description="Ignore le cache et recharge les données."),
 ) -> RepositoryListResponse:
     """Liste des dépôts suivis, avec pagination de base."""
-    items = await get_repositories(provider)
+    items = await get_repositories(provider, refresh=refresh)
     return RepositoryListResponse(items=items[:limit], total=len(items), data_source=provider.name)

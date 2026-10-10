@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getHealth, getPullRequests } from '@/services/apiClient'
+import { ApiError, getHealth, getIssues, getPullRequestDetail, getPullRequests } from '@/services/apiClient'
 
 const healthPayload = {
   status: 'ok',
@@ -76,6 +76,54 @@ describe('apiClient', () => {
     await getPullRequests({ repository: 'acme/web-app' })
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/pull-requests?repository=acme%2Fweb-app',
+      expect.anything(),
+    )
+  })
+
+  it('construit les filtres de la requête issues', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getIssues({ repository: 'acme/web-app', state: 'closed' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/issues?repository=acme%2Fweb-app&state=closed',
+      expect.anything(),
+    )
+  })
+
+  it('ajoute le paramètre refresh quand demandé', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getIssues({ state: 'open', refresh: true })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/issues?state=open&refresh=true',
+      expect.anything(),
+    )
+  })
+
+  it('construit l’URL du détail de pull request', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ number: 142 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getPullRequestDetail(142, 'acme/web-app')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/pull-requests/142?repository=acme%2Fweb-app',
       expect.anything(),
     )
   })

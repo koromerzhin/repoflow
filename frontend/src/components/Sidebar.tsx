@@ -1,4 +1,5 @@
 import {
+  CircleDot,
   FolderGit2,
   GitPullRequest,
   History,
@@ -11,6 +12,7 @@ const navigation = [
   { to: '/', label: 'Tableau de bord', icon: LayoutDashboard, end: true },
   { to: '/repositories', label: 'Dépôts', icon: FolderGit2, end: false },
   { to: '/pull-requests', label: 'Pull requests', icon: GitPullRequest, end: false },
+  { to: '/issues', label: 'Issues', icon: CircleDot, end: false },
   { to: '/automations', label: 'Automatisations', icon: Workflow, end: false },
   { to: '/history', label: 'Historique', icon: History, end: false },
 ]

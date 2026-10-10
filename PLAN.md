@@ -20,22 +20,24 @@ Feuille de route priorisée. `[x]` = fait, `[ ]` = à faire.
 - [x] Docker Compose (backend + frontend) et `.env.example`.
 - [x] CI GitHub Actions (backend + frontend).
 
-## Phase 1 — Connexion GitHub réelle (priorité haute)
+## Phase 1 — Connexion GitHub réelle (priorité haute) ✅
 
-- [ ] Choisir et documenter le mode d'authentification (GitHub App recommandée).
-- [ ] Implémenter `GithubProvider` : `list_repositories`, `list_pull_requests`.
-- [ ] Client HTTP GitHub avec pagination (`Link`) et gestion du rate limit.
-- [ ] Normalisation des erreurs GitHub (`ProviderError`).
-- [ ] Ne jamais journaliser ni exposer le token.
-- [ ] Tests avec réponses GitHub simulées (aucun appel réseau réel en CI).
-- [ ] Résolution des checks via l'API Checks / commit statuses.
+- [x] Choisir et documenter le mode d'authentification (GitHub App recommandée ; jeton PAT/installation accepté).
+- [x] Implémenter `GithubProvider` : `list_repositories`, `list_pull_requests`.
+- [x] Client HTTP GitHub avec pagination (`Link`) et gestion du rate limit.
+- [x] Normalisation des erreurs GitHub (`ProviderError`).
+- [x] Ne jamais journaliser ni exposer le token (en-tête uniquement, loggers httpx/httpcore silencieux).
+- [x] Tests avec réponses GitHub simulées (aucun appel réseau réel en CI).
+- [x] Résolution des checks via l'API Checks / commit statuses.
 
-## Phase 2 — Issues et détails
+## Phase 2 — Issues et détails ✅
 
-- [ ] Endpoint `GET /api/v1/issues` + filtres par dépôt et par état.
-- [ ] Page Issues côté frontend.
-- [ ] Détail d'une pull request (fichiers, revues, timeline).
-- [ ] Mise en cache et rafraîchissement manuel.
+- [x] Endpoint `GET /api/v1/issues` + filtres par dépôt et par état.
+- [x] Page Issues côté frontend.
+- [x] Détail d'une pull request (fichiers, revues, timeline) :
+      `GET /api/v1/pull-requests/{number}` + page frontend dédiée.
+- [x] Mise en cache TTL côté serveur et rafraîchissement manuel (`?refresh=true`,
+      boutons « Rafraîchir »).
 
 ## Phase 3 — Configuration des règles d'automatisation (priorité haute)
 
@@ -67,6 +69,9 @@ Feuille de route priorisée. `[x]` = fait, `[ ]` = à faire.
 
 - `AUTO_CREATE_TABLES` est activé par défaut en développement ; en production,
   utiliser `alembic upgrade head`.
-- Le fournisseur GitHub réel est un emplacement réservé qui répond `503`.
+- Le fournisseur GitHub est en lecture seule et interroge le détail de chaque
+  PR (une optimisation GraphQL réduirait le nombre de requêtes).
+- L'échange clé privée → jeton d'installation (GitHub App) n'est pas encore
+  implémenté : fournir un jeton prêt à l'emploi.
 - La liste « prête à fusionner » du tableau de bord est une **évaluation
   indicative** sans exécution.

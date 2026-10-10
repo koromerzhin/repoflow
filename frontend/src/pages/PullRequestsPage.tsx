@@ -4,16 +4,21 @@ import { useState } from 'react'
 import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
+import { RefreshButton } from '@/components/RefreshButton'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
-import { useAsync } from '@/hooks/useAsync'
+import { useAsync, useResource } from '@/hooks/useAsync'
 import { getPullRequests, getRepositories } from '@/services/apiClient'
 
 export function PullRequestsPage() {
   const [repository, setRepository] = useState('')
 
   const repositories = useAsync(getRepositories, [])
-  const pullRequests = useAsync(
-    (signal) => getPullRequests(repository ? { repository } : {}, signal),
+  const pullRequests = useResource(
+    (options, signal) =>
+      getPullRequests(
+        { repository: repository || undefined, refresh: options.refresh },
+        signal,
+      ),
     [repository],
   )
 
@@ -29,21 +34,24 @@ export function PullRequestsPage() {
         title="Pull requests"
         description="Pull requests ouvertes, état des checks CI et évaluation indicative des conditions de fusion."
         actions={
-          <label className="flex items-center gap-2 text-sm text-slate-400">
-            <span className="hidden sm:inline">Dépôt</span>
-            <select
-              value={repository}
-              onChange={(event) => setRepository(event.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-            >
-              <option value="">Tous les dépôts</option>
-              {repositories.data?.items.map((item) => (
-                <option key={item.id} value={item.full_name}>
-                  {item.full_name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex items-center gap-3">
+            <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
+            <label className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="hidden sm:inline">Dépôt</span>
+              <select
+                value={repository}
+                onChange={(event) => setRepository(event.target.value)}
+                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+              >
+                <option value="">Tous les dépôts</option>
+                {repositories.data?.items.map((item) => (
+                  <option key={item.id} value={item.full_name}>
+                    {item.full_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         }
       />
 
@@ -68,7 +76,16 @@ export function PullRequestsPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-mono text-slate-500">#{pr.number}</span>
-                    <h2 className="text-base font-semibold text-slate-100">{pr.title}</h2>
+                    <h2 className="text-base font-semibold text-slate-100">
+                      <Link
+                        to={`/pull-requests/${pr.number}?repository=${encodeURIComponent(
+                          pr.repository_full_name,
+                        )}`}
+                        className="hover:text-sky-300"
+                      >
+                        {pr.title}
+                      </Link>
+                    </h2>
                   </div>
                   <p className="mt-1 text-sm text-slate-400">
                     {pr.repository_full_name} · {pr.author}

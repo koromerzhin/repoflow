@@ -44,6 +44,16 @@ class ReviewDecision(StrEnum):
     NONE = "none"
 
 
+class ReviewState(StrEnum):
+    """État individuel d'une revue (plus fin que ``ReviewDecision``)."""
+
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    COMMENTED = "commented"
+    DISMISSED = "dismissed"
+    PENDING = "pending"
+
+
 class MergeBlocker(BaseModel):
     """Motif empêchant la fusion (indicatif, aucune fusion n'est déclenchée)."""
 
@@ -94,3 +104,42 @@ class PullRequestListResponse(BaseModel):
     items: list[PullRequest]
     total: int = Field(ge=0)
     data_source: str
+
+
+class PullRequestFile(BaseModel):
+    """Fichier modifié par une pull request."""
+
+    filename: str
+    status: str = Field(description="added, modified, removed, renamed, ...")
+    additions: int = Field(ge=0)
+    deletions: int = Field(ge=0)
+    changes: int = Field(ge=0)
+
+
+class PullRequestReview(BaseModel):
+    """Revue déposée sur une pull request."""
+
+    id: str
+    author: str
+    state: ReviewState
+    body: str | None = None
+    submitted_at: datetime | None = None
+
+
+class TimelineEvent(BaseModel):
+    """Événement de la chronologie d'une pull request."""
+
+    id: str
+    event_type: str
+    actor: str
+    message: str
+    created_at: datetime
+
+
+class PullRequestDetail(PullRequest):
+    """Pull request détaillée : description, fichiers, revues et chronologie."""
+
+    body: str | None = None
+    files: list[PullRequestFile] = Field(default_factory=list)
+    reviews: list[PullRequestReview] = Field(default_factory=list)
+    timeline: list[TimelineEvent] = Field(default_factory=list)

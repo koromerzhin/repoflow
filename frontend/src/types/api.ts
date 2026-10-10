@@ -125,6 +125,66 @@ export interface PullRequestListResponse {
   data_source: DataSource
 }
 
+export type ReviewState =
+  | 'approved'
+  | 'changes_requested'
+  | 'commented'
+  | 'dismissed'
+  | 'pending'
+
+export interface PullRequestFile {
+  filename: string
+  status: string
+  additions: number
+  deletions: number
+  changes: number
+}
+
+export interface PullRequestReview {
+  id: string
+  author: string
+  state: ReviewState
+  body: string | null
+  submitted_at: string | null
+}
+
+export interface TimelineEvent {
+  id: string
+  event_type: string
+  actor: string
+  message: string
+  created_at: string
+}
+
+export interface PullRequestDetail extends PullRequest {
+  body: string | null
+  files: PullRequestFile[]
+  reviews: PullRequestReview[]
+  timeline: TimelineEvent[]
+}
+
+export type IssueState = 'open' | 'closed'
+
+export interface Issue {
+  id: string
+  number: number
+  repository_full_name: string
+  title: string
+  author: string
+  state: IssueState
+  is_pull_request: boolean
+  created_at: string
+  updated_at: string
+  html_url: string
+  is_demo: boolean
+}
+
+export interface IssueListResponse {
+  items: Issue[]
+  total: number
+  data_source: DataSource
+}
+
 export interface ApiErrorBody {
   error: {
     code: string
