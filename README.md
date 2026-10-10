@@ -31,7 +31,8 @@ docker compose up --build
 
 Pour brancher des vraies données GitHub, éditer `.env` :
 `REPOFLOW_GITHUB_PROVIDER=github` et renseigner `REPOFLOW_GITHUB_TOKEN`
-(voir `docs/github-integration.md`). Pour utiliser PostgreSQL :
+(voir `docs/github-integration.md`). Pour utiliser PostgreSQL : pointer
+`REPOFLOW_DATABASE_URL` vers le service `postgres` du compose, puis lancer
 `docker compose --profile postgres up --build` (détails plus bas).
 
 ## Fonctionnalités
@@ -113,6 +114,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+Pour le support PostgreSQL, installer l'extra correspondant (au lieu de ou en
+plus de `dev`) :
+
+```bash
+pip install -e ".[dev,postgres]"
+```
+
 Lancer le serveur de développement :
 
 ```bash
@@ -126,8 +134,8 @@ uvicorn app.main:app --reload --port 8000
 Par défaut, la base SQLite est créée automatiquement et le mode
 démonstration est actif (aucun token requis).
 
-Le worker d'analyse périodique est désactivé par défaut. Pour l'exécuter
-manuellement (une passe) ou en continu :
+Le worker d'analyse périodique est désactivé par défaut. Pour l'exécuter en
+continu dans un processus séparé :
 
 ```bash
 python -m app.worker
@@ -169,7 +177,8 @@ Avec PostgreSQL (profil optionnel) :
 
 ```bash
 # 1. Adapter .env :
-#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
+#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:repoflow@postgres:5432/repoflow
+#    (le mot de passe doit correspondre à REPOFLOW_DB_PASSWORD)
 # 2. Lancer, profil "postgres" inclus :
 docker compose --profile postgres up --build
 ```
@@ -228,9 +237,9 @@ repoflow/
 │   └── pyproject.toml
 ├── frontend/
 │   └── src/
-│       ├── components/  features/  layouts/  pages/
-│       ├── services/    hooks/     lib/      types/
-│       └── main.tsx
+│       ├── components/  layouts/  pages/
+│       ├── hooks/       lib/      services/  types/
+│       └── test/        main.tsx
 ├── docs/                   # architecture, GitHub, guide utilisateur
 ├── .github/workflows/      # CI
 ├── docker-compose.yml

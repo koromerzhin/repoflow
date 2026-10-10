@@ -10,7 +10,8 @@ WORKDIR /app
 # Dépendances d'abord pour tirer parti du cache Docker.
 COPY pyproject.toml README.md ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install .
+# L'extra "postgres" embarque psycopg : une même image sert SQLite et PostgreSQL.
+RUN pip install --upgrade pip && pip install ".[postgres]"
 
 # Outils de migration et de développement (Alembic).
 COPY alembic.ini ./
