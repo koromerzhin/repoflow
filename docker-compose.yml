@@ -1,0 +1,44 @@
+# RepoFlow — orchestration Docker Compose
+#
+# Monolithe modulaire : un service backend (FastAPI) et un service frontend
+# (Vite) pour le développement. Un worker d'analyse périodique pourra être
+# ajouté ultérieurement comme service séparé partageant la même image backend.
+#
+# Usage :
+#   cp .env.example .env
+#   docker compose up --build
+#   Backend  : http://localhost:8000
+#   Frontend : http://localhost:5173
+
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      REPOFLOW_ENVIRONMENT: development
+      REPOFLOW_DATABASE_URL: sqlite+pysqlite:////data/repoflow.db
+      REPOFLOW_AUTO_CREATE_TABLES: "true"
+      REPOFLOW_GITHUB_PROVIDER: ${REPOFLOW_GITHUB_PROVIDER:-demo}
+      REPOFLOW_GITHUB_TOKEN: ${REPOFLOW_GITHUB_TOKEN:-}
+      REPOFLOW_CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      REPOFLOW_KILL_SWITCH_ENGAGED: ${REPOFLOW_KILL_SWITCH_ENGAGED:-false}
+    volumes:
+      - repoflow-data:/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  repoflow-data:
