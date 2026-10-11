@@ -18,6 +18,7 @@ function renderLayout() {
       <Routes>
         <Route path="/" element={<AppLayout />}>
           <Route index element={<div>Contenu de la page</div>} />
+          <Route path="repositories" element={<div>Page des dépôts</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -102,5 +103,17 @@ describe('AppLayout', () => {
     expect(closeButtons).toHaveLength(2)
     await user.click(closeButtons[1])
     expect(screen.queryByRole('button', { name: 'Fermer le menu' })).not.toBeInTheDocument()
+  })
+
+  it('déplace le focus sur le contenu à chaque navigation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getHealth).mockResolvedValue(health())
+
+    renderLayout()
+
+    await user.click(screen.getByRole('link', { name: 'Dépôts' }))
+
+    expect(screen.getByRole('main')).toHaveFocus()
+    expect(screen.getByText('Page des dépôts')).toBeInTheDocument()
   })
 })

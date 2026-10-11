@@ -5,11 +5,13 @@ import { AsyncState } from '@/components/AsyncState'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useResource } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatDateTime } from '@/lib/status'
 import { getRepositories } from '@/services/apiClient'
 
 export function RepositoriesPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('repositories.title'))
   const { data, error, loading, reload, refresh } = useResource(
     (options, signal) => getRepositories(signal, { refresh: options.refresh }),
     [],

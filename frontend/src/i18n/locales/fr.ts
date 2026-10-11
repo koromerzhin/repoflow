@@ -21,6 +21,7 @@ export const fr = {
   },
   app: {
     skipToContent: 'Aller au contenu',
+    rootMissing: 'L\u2019élément racine #root est introuvable.',
     subtitle: 'Supervision multi-dépôts GitHub',
     apiOperational: 'API opérationnelle',
     apiDegraded: 'API dégradée',
@@ -35,6 +36,10 @@ export const fr = {
   async: {
     errorTitle: 'Erreur de chargement',
     empty: 'Aucune donnée à afficher.',
+  },
+  api: {
+    networkError: 'Impossible de contacter le serveur RepoFlow. Vérifiez qu\u2019il est démarré.',
+    httpError: 'La requête a échoué (statut {{status}}).',
   },
   filter: {
     search: 'Rechercher',

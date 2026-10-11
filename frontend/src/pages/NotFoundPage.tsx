@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 
 export function NotFoundPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('notFound.title'))
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
       <p className="text-5xl font-bold text-slate-700">404</p>

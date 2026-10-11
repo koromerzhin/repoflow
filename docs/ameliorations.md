@@ -139,9 +139,9 @@ Reste éventuellement : lister les installations dynamiquement
 toutes les pistes P1/P2 actives réalisées. Nouvelles pistes, classées par
 rapport valeur/effort.
 
-## P1 — Rapides
+## P1 — Rapides — ✅ réalisé le 11/10/2026
 
-### 16. Chaînes d'erreur frontend non localisées
+### 16. ✅ Chaînes d'erreur frontend non localisées
 Deux messages d'erreur de `apiClient.ts` (« Impossible de contacter le
 serveur… », « La requête a échoué… ») et l'exception de `main.tsx` sont en
 français dur, hors `src/i18n/`. Les passer par des clés de traduction
@@ -149,19 +149,19 @@ français dur, hors `src/i18n/`. Les passer par des clés de traduction
 réellement bilingue de bout en bout.
 *Fichiers : `frontend/src/services/apiClient.ts`, `main.tsx`. Effort : S.*
 
-### 17. Focus sur le contenu à chaque navigation
+### 17. ✅ Focus sur le contenu à chaque navigation
 Seul le lien « Aller au contenu » existe : après un changement de route, le
 focus reste sur le lien cliqué. Déplacer le focus sur `<main>` (ou son
 titre) à chaque navigation pour les lecteurs d'écran et le clavier.
 *Fichier : `frontend/src/layouts/AppLayout.tsx`. Effort : S.*
 
-### 18. Titres de page par route
+### 18. ✅ Titres de page par route
 `<title>RepoFlow</title>` est statique : impossible de distinguer les pages
 dans l'historique ou les onglets. Un petit hook `useDocumentTitle(t('…'))`
 appliqué par page (et traduit).
 *Fichier : `frontend/index.html` + pages. Effort : S.*
 
-### 19. Dockerfile backend : retirer le frontend BuildKit
+### 19. ✅ Dockerfile backend : retirer le frontend BuildKit
 `# syntax=docker/dockerfile:1` force le pull de `docker/dockerfile:1` à chaque
 build (échec DNS observé le 10/10) et l'extra `postgres` est installé
 systématiquement (image +lourde). Supprimer la ligne de syntax, n'installer

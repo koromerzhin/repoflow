@@ -7,6 +7,7 @@ import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useResource } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { auditEventClass, auditEventLabel, formatDateTime } from '@/lib/status'
 import { getAudit } from '@/services/apiClient'
 import type { AuditEvent } from '@/types/api'
@@ -40,6 +41,7 @@ function payloadSummary(event: AuditEvent, t: TFunction): string | null {
 
 export function HistoryPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('history.title'))
   const [eventType, setEventType] = useState('')
   const [repository, setRepository] = useState('')
 

@@ -2,7 +2,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { ApiError } from '@/services/apiClient'
+import { apiErrorMessage, type ApiError } from '@/services/apiClient'
 
 interface AsyncStateProps {
   loading: boolean
@@ -45,7 +45,7 @@ export function AsyncState({
           <AlertTriangle className="size-5" aria-hidden />
           <span className="font-semibold">{t('async.errorTitle')}</span>
         </div>
-        <p className="text-sm text-red-200/90">{error.message}</p>
+        <p className="text-sm text-red-200/90">{apiErrorMessage(error, t)}</p>
         {onRetry ? (
           <button
             type="button"

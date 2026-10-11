@@ -6,6 +6,7 @@ import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { useAsync } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatDateTime } from '@/lib/status'
 import {
   ApiError,
@@ -23,6 +24,7 @@ import type { AutomationRule, RepositoryConfig } from '@/types/api'
 
 export function AutomationsPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('automations.title'))
   const configs = useAsync((signal) => listRepositoryConfigs(signal), [])
   const status = useAsync((signal) => getAutomationStatus(signal), [])
 

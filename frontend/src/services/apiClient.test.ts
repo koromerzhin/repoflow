@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TFunction } from 'i18next'
 
 import {
   ApiError,
+  apiErrorMessage,
   createRepositoryConfig,
   deleteRepositoryConfig,
   getAudit,
@@ -73,6 +75,34 @@ describe('apiClient', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
 
     await expect(getHealth()).rejects.toMatchObject({ code: 'network_error', status: 0 })
+  })
+
+  it('signale une erreur HTTP sans corps interprétable', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
+
+    await expect(getHealth()).rejects.toMatchObject({ code: 'http_error', status: 500 })
+  })
+
+  describe('apiErrorMessage', () => {
+    const identity = ((key: string) => key) as unknown as TFunction
+
+    it('traduit une erreur réseau', () => {
+      const error = new ApiError('network', 0, 'network_error')
+      expect(apiErrorMessage(error, identity)).toBe('api.networkError')
+    })
+
+    it('traduit une erreur HTTP avec le statut', () => {
+      const error = new ApiError('http', 500, 'http_error')
+      const t = ((key: string, options?: { status?: number }) =>
+        key === 'api.httpError' ? `failed (${options?.status})` : key) as unknown as TFunction
+      expect(apiErrorMessage(error, t)).toBe('failed (500)')
+    })
+
+    it('conserve le message localisé du backend', () => {
+      const error = new ApiError('Ressource absente.', 404, 'not_found')
+      expect(apiErrorMessage(error, identity)).toBe('Ressource absente.')
+    })
   })
 
   it('construit le filtre de dépôt dans la requête', async () => {

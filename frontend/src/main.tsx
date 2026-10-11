@@ -3,15 +3,15 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
 import { App } from '@/App'
-import '@/i18n'
+import i18n from '@/i18n'
 import '@/index.css'
 
-const container = document.getElementById('root')
-if (!container) {
-  throw new Error("L'élément racine #root est introuvable.")
+const rootElement = document.getElementById('root')
+if (!rootElement) {
+  throw new Error(i18n.t('app.rootMissing'))
 }
 
-createRoot(container).render(
+createRoot(rootElement).render(
   <StrictMode>
     <BrowserRouter>
       <App />

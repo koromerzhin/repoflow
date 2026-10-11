@@ -12,11 +12,13 @@ import {
   ReviewStateBadge,
 } from '@/components/StateBadges'
 import { useResource } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { fileStatusClasses, fileStatusLabels, formatDateTime } from '@/lib/status'
 import { getPullRequestDetail } from '@/services/apiClient'
 
 export function PullRequestDetailPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('detail.title'))
   const { number: numberParam } = useParams<{ number: string }>()
   const [searchParams] = useSearchParams()
   const repository = searchParams.get('repository') ?? ''

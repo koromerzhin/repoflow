@@ -13,6 +13,7 @@ import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { IssueStateBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useUrlState } from '@/hooks/useUrlState'
 import { formatDateTime } from '@/lib/status'
 import { getIssues, getRepositories } from '@/services/apiClient'
@@ -34,6 +35,7 @@ function distinctSorted(values: (string | null)[]): string[] {
 
 export function IssuesPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('issues.title'))
   const [repository, setRepository] = useUrlState('repository', '')
   const [stateParam, setStateParam] = useUrlState('state', 'open')
   const [query, setQuery] = useUrlState('q', '')

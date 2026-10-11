@@ -21,6 +21,7 @@ export const en = {
   },
   app: {
     skipToContent: 'Skip to content',
+    rootMissing: 'Root element #root not found.',
     subtitle: 'Multi-repository GitHub supervision',
     apiOperational: 'API operational',
     apiDegraded: 'API degraded',
@@ -35,6 +36,10 @@ export const en = {
   async: {
     errorTitle: 'Loading error',
     empty: 'Nothing to display.',
+  },
+  api: {
+    networkError: 'Cannot reach the RepoFlow server. Check that it is running.',
+    httpError: 'The request failed (status {{status}}).',
   },
   filter: {
     search: 'Search',

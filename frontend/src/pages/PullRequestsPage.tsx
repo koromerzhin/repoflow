@@ -12,6 +12,7 @@ import { RepositoryCombobox } from '@/components/RepositoryCombobox'
 import { SearchField } from '@/components/SearchField'
 import { VisibilityBadge } from '@/components/VisibilityBadge'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useUrlState } from '@/hooks/useUrlState'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
@@ -19,6 +20,7 @@ import { getPullRequests, getRepositories } from '@/services/apiClient'
 
 export function PullRequestsPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('pr.title'))
   const [repository, setRepository] = useUrlState('repository', '')
   const [query, setQuery] = useUrlState('q', '')
   const [autoSeconds, setAutoSeconds] = useState(0)

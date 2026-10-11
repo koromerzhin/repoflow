@@ -12,6 +12,7 @@
 #
 # Avec PostgreSQL (production) :
 #   REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
+#   REPOFLOW_INSTALL_POSTGRES=true
 #   docker compose --profile postgres up --build
 #
 # Avec un cache Redis partagé (multi-instances) :
@@ -23,6 +24,8 @@ services:
   backend:
     build:
       context: ./backend
+      args:
+        REPOFLOW_INSTALL_POSTGRES: ${REPOFLOW_INSTALL_POSTGRES:-false}
     environment:
       REPOFLOW_ENVIRONMENT: ${REPOFLOW_ENVIRONMENT:-development}
       REPOFLOW_DATABASE_URL: ${REPOFLOW_DATABASE_URL:-sqlite+pysqlite:////data/repoflow.db}

@@ -17,6 +17,7 @@ import type {
   RepositoryConfigUpdate,
   RepositoryListResponse,
 } from '@/types/api'
+import type { TFunction } from 'i18next'
 
 /**
  * Erreur normalisée renvoyée par le client HTTP.
@@ -32,6 +33,21 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
   }
+}
+
+/**
+ * Traduit les erreurs produites côté client (réseau, HTTP générique).
+ * Les erreurs du backend portent déjà un message localisé : elles sont
+ * telles quelles.
+ */
+export function apiErrorMessage(error: ApiError, t: TFunction): string {
+  if (error.code === 'network_error') {
+    return t('api.networkError')
+  }
+  if (error.code === 'http_error') {
+    return t('api.httpError', { status: error.status })
+  }
+  return error.message
 }
 
 const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api'

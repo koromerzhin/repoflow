@@ -15,12 +15,14 @@ import { CounterCard } from '@/components/CounterCard'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useResource } from '@/hooks/useAsync'
 import { formatDateTime } from '@/lib/status'
 import { getDashboard } from '@/services/apiClient'
 
 export function DashboardPage() {
   const { t } = useTranslation()
+  useDocumentTitle(t('dashboard.title'))
   const [autoSeconds, setAutoSeconds] = useState(0)
   const { data, error, loading, reload, refresh } = useResource(
     (options, signal) => getDashboard(signal, { refresh: options.refresh }),

@@ -1,5 +1,5 @@
 import { CircleAlert, Gauge, Menu, ShieldCheck, ShieldX } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
@@ -17,6 +17,12 @@ export function AppLayout() {
   const { t } = useTranslation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const mainRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    mainRef.current?.focus()
+  }, [location.pathname])
+
   const { data: health } = useAsync(getHealth, [])
 
   const isDemo = health?.data_source === 'demo'
@@ -103,7 +109,13 @@ export function AppLayout() {
           </div>
         ) : null}
 
-        <main id="contenu" key={location.pathname} className="mx-auto max-w-6xl px-4 py-8">
+        <main
+          id="contenu"
+          ref={mainRef}
+          tabIndex={-1}
+          key={location.pathname}
+          className="mx-auto max-w-6xl px-4 py-8 focus:outline-none"
+        >
           <Outlet />
         </main>
       </div>
