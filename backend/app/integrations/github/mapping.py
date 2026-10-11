@@ -149,6 +149,7 @@ def map_repository(data: dict[str, Any]) -> RepositoryRecord:
         full_name=str(data.get("full_name") or (f"{owner}/{name}" if owner else name)),
         default_branch=str(data.get("default_branch") or "main"),
         private=bool(data.get("private")),
+        archived=bool(data.get("archived")),
         open_issues_count=int(data.get("open_issues_count") or 0),
         open_pull_requests_count=0,
         updated_at=parse_datetime(data.get("updated_at")),

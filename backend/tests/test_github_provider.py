@@ -298,6 +298,85 @@ async def test_list_issues_propage_une_erreur_fournisseur(
         await provider.aclose()
 
 
+def _repo_payload(name: str, *, archived: bool) -> dict:
+    return {
+        "id": hash(name) % 10000,
+        "name": name,
+        "full_name": f"acme/{name}",
+        "owner": {"login": "acme"},
+        "default_branch": "main",
+        "private": False,
+        "archived": archived,
+        "open_issues_count": 1,
+        "updated_at": "2024-05-02T10:00:00Z",
+        "html_url": f"https://github.com/acme/{name}",
+    }
+
+
+def _issue_payload(number: int, full_name: str) -> dict:
+    return {
+        "id": number,
+        "number": number,
+        "title": f"Bug {number}",
+        "user": {"login": "dev"},
+        "state": "open",
+    }
+
+
+def _archiving_handler(request: httpx.Request) -> httpx.Response:
+    path = request.url.path
+    if path == "/user/repos":
+        return httpx.Response(
+            200,
+            json=[
+                _repo_payload("actif", archived=False),
+                _repo_payload("archive", archived=True),
+            ],
+        )
+    if path.endswith("/issues"):
+        repo = path.removesuffix("/issues").removeprefix("/repos/")
+        return httpx.Response(200, json=[_issue_payload(len(repo), repo)])
+    if path.endswith("/pulls"):
+        return httpx.Response(200, json=[{"number": 1}])
+    if path.endswith("/pulls/1"):
+        return httpx.Response(200, json=_pr_detail())
+    if path.endswith("/check-runs"):
+        return httpx.Response(200, json={"total_count": 0, "check_runs": []})
+    if path.endswith("/status"):
+        return httpx.Response(200, json={"state": "success", "statuses": []})
+    if path.endswith("/reviews"):
+        return httpx.Response(200, json=[])
+    return httpx.Response(404, json={"message": f"non simulé: {path}"})
+
+
+async def test_depots_archives_exclus_des_listes_github() -> None:
+    client = GitHubClient(
+        token="secret-token",
+        api_url="https://api.github.com",
+        transport=httpx.MockTransport(_archiving_handler),
+    )
+    provider = GithubProvider(token="secret-token", client=client)
+    try:
+        # Le référentiel n'expose pas les dépôts archivés (affichage, compteurs).
+        repositories = await provider.list_repositories()
+        assert [repo.full_name for repo in repositories] == ["acme/actif"]
+        assert repositories[0].archived is False
+
+        # Les fan-out « tous dépôts » excluent eux aussi les dépôts archivés.
+        issues = await provider.list_issues()
+        assert [issue.repository_full_name for issue in issues] == ["acme/actif"]
+        pull_requests = await provider.list_pull_requests()
+        assert [pr.repository_full_name for pr in pull_requests] == ["acme/actif"]
+
+        # Un dépôt explicite reste interrogeable (vue ciblée, détail…).
+        issues_archives = await provider.list_issues("acme/archive")
+        assert [issue.repository_full_name for issue in issues_archives] == ["acme/archive"]
+        pull_requests_archives = await provider.list_pull_requests("acme/archive")
+        assert [pr.repository_full_name for pr in pull_requests_archives] == ["acme/archive"]
+    finally:
+        await provider.aclose()
+
+
 async def test_get_pull_request_detail(provider: GithubProvider) -> None:
     detail = await provider.get_pull_request("acme/web-app", 10)
     try:

@@ -74,7 +74,11 @@ class GithubProvider:
         await self._client.aclose()
 
     async def list_repositories(self) -> list[RepositoryRecord]:
-        """Dépôts accessibles au token (lecture seule)."""
+        """Dépôts accessibles au token (lecture seule), hors dépôts archivés.
+
+        Un dépôt archivé est figé : il n'apparaît ni dans le référentiel
+        affiché, ni dans les agrégations (PR, issues, compteurs).
+        """
         data = await self._client.get_paginated(
             "/user/repos",
             {
@@ -83,17 +87,23 @@ class GithubProvider:
                 "affiliation": "owner,collaborator,organization_member",
             },
         )
-        return [map_repository(item) for item in data]
+        return [record for record in (map_repository(item) for item in data) if not record.archived]
 
     async def list_pull_requests(
         self, repository_full_name: str | None = None
     ) -> list[PullRequestRecord]:
-        """Pull requests ouvertes, avec checks CI et décision de revue."""
+        """Pull requests ouvertes, avec checks CI et décision de revue.
+
+        Sans dépôt explicite, les dépôts archivés sont exclus : leurs PR
+        sont figées et n'ont pas vocation à apparaître dans les listes.
+        """
         if repository_full_name:
             full_names = [repository_full_name]
         else:
             repositories = await self.list_repositories()
-            full_names = [repository.full_name for repository in repositories]
+            full_names = [
+                repository.full_name for repository in repositories if not repository.archived
+            ]
 
         pull_requests: list[PullRequestRecord] = []
         for full_name in full_names:
@@ -201,12 +211,15 @@ class GithubProvider:
         par dépôt, comme ``provider.collect``) : un dépôt lent ou en échec
         réseau est ignoré plutôt que de faire échouer toute la liste ; les
         erreurs applicatives (limite de requêtes, authentification) remontent.
+        Les dépôts archivés sont exclus : leurs issues sont figées.
         """
         if repository_full_name:
             full_names = [repository_full_name]
         else:
             repositories = await self.list_repositories()
-            full_names = [repository.full_name for repository in repositories]
+            full_names = [
+                repository.full_name for repository in repositories if not repository.archived
+            ]
 
         settings = get_settings()
         semaphore = asyncio.Semaphore(settings.github_max_concurrency)

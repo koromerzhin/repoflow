@@ -58,6 +58,10 @@ temps par dépôt (`REPOFLOW_GITHUB_COLLECTION_TIMEOUT`). Un dépôt lent ou en
 erreurs applicatives (limite de requêtes, authentification, permissions)
 remontent telles quelles au client.
 
+Les dépôts **archivés** sont exclus du référentiel affiché et de toutes les
+agrégations (PR, issues, compteurs) : leurs données sont figées. Un dépôt
+archivé reste interrogeable individuellement (vue ciblée, détail de PR).
+
 ## Worker d'analyse
 
 - Exécuté périodiquement (`REPOFLOW_WORKER_ENABLED`, intervalle configurable). Peut tourner en mode « one-shot ».

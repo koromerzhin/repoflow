@@ -58,6 +58,10 @@ time budget (`REPOFLOW_GITHUB_COLLECTION_TIMEOUT`). A slow repository or a
 errors (rate limit, authentication, permissions) are propagated as-is to the
 client.
 
+**Archived** repositories are excluded from the displayed referential and all
+aggregations (pull requests, issues, counters): their data is frozen. An
+archived repository remains individually reachable (targeted view, PR detail).
+
 ## Analysis worker
 
 - Exécuté périodiquement (`REPOFLOW_WORKER_ENABLED`, intervalle configurable). Peut tourner en mode « one-shot ».

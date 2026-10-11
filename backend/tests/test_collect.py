@@ -167,6 +167,20 @@ async def test_collect_ignore_un_depot_trop_lent(monkeypatch) -> None:  # type: 
     assert {pr.repository_full_name for pr in pull_requests} == {"acme/fast"}
 
 
+async def test_collect_ignore_les_depots_archives(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    _patch_settings(monkeypatch)
+    actif = _repo("acme/actif")
+    archive = _repo("acme/archive").model_copy(update={"archived": True})
+    provider = FakeProvider([actif, archive])
+
+    repositories, pull_requests = await collect(provider)
+
+    # Le dépôt archivé reste dans le référentiel (compteurs)…
+    assert [r.full_name for r in repositories] == ["acme/actif", "acme/archive"]
+    # …mais ses PR ne sont pas collectées.
+    assert {pr.repository_full_name for pr in pull_requests} == {"acme/actif"}
+
+
 async def test_collect_sans_depot(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     _patch_settings(monkeypatch)
     repositories, pull_requests = await collect(FakeProvider([]))

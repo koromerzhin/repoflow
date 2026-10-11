@@ -36,10 +36,14 @@ def pull_request_stats(pull_requests: list[PullRequestRecord]) -> dict[str, int]
 def _counters(
     repositories: list[RepositoryRecord], pull_requests: list[PullRequestRecord]
 ) -> DashboardCounters:
+    # Les dépôts archivés restent comptés côté référentiel, mais leurs
+    # issues (figées) n'entrent pas dans le compteur d'issues ouvertes.
     return DashboardCounters(
         repositories=len(repositories),
         **pull_request_stats(pull_requests),
-        open_issues=sum(repository.open_issues_count for repository in repositories),
+        open_issues=sum(
+            repository.open_issues_count for repository in repositories if not repository.archived
+        ),
     )
 
 

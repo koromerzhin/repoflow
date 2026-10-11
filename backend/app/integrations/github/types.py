@@ -29,6 +29,9 @@ class RepositoryRecord(BaseModel):
     full_name: str
     default_branch: str
     private: bool
+    # Dépôt archivé : ses PR/issues sont figées et exclues des listes et
+    # agrégations (le dépôt reste listé côté référentiel).
+    archived: bool = False
     open_issues_count: int = Field(ge=0)
     open_pull_requests_count: int = Field(ge=0)
     updated_at: datetime

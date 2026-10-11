@@ -68,7 +68,8 @@ async def collect(provider: Provider) -> tuple[list[RepositoryRecord], list[Pull
     (``REPOFLOW_GITHUB_COLLECTION_TIMEOUT``). Un dépôt lent ou en erreur est
     ignoré (ses PR sont omises) plutôt que de faire échouer toute la requête :
     l'agrégat reste exploitable même quand l'API GitHub est partiellement
-    indisponible.
+    indisponible. Les dépôts archivés sont exclus de la collecte des PR
+    (mais restent présents dans la liste des dépôts renvoyée).
     """
     settings = get_settings()
     repositories = list(await provider.list_repositories())
@@ -79,6 +80,8 @@ async def collect(provider: Provider) -> tuple[list[RepositoryRecord], list[Pull
     timeout = settings.github_collection_timeout
 
     async def fetch(repository: RepositoryRecord) -> list[PullRequestRecord]:
+        if repository.archived:
+            return []
         async with semaphore:
             try:
                 return await asyncio.wait_for(
