@@ -47,8 +47,12 @@ services:
       REPOFLOW_WORKER_ENABLED: ${REPOFLOW_WORKER_ENABLED:-false}
       REPOFLOW_CACHE_BACKEND: ${REPOFLOW_CACHE_BACKEND:-memory}
       REPOFLOW_CACHE_REDIS_URL: ${REPOFLOW_CACHE_REDIS_URL:-redis://redis:6379/0}
+      REPOFLOW_CACHE_TTL_SECONDS: ${REPOFLOW_CACHE_TTL_SECONDS:-30}
     volumes:
-      - repoflow-data:/data
+      # Dossier hôte accessible directement (le fichier repoflow.db est
+      # visible dans ./data à la racine du dépôt). Le conteneur tourne en
+      # non-root (uid 1001) : le dossier doit lui appartenir, voir README.
+      - ./data:/data
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -115,5 +119,4 @@ services:
       start_period: 10s
 
 volumes:
-  repoflow-data:
   repoflow-pg-data:

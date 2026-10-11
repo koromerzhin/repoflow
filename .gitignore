@@ -40,6 +40,8 @@ coverage.xml
 *.db
 *.sqlite
 *.sqlite3
+# Données persistantes montées dans le conteneur (docker-compose).
+/data/
 
 # --- Node / frontend ---
 node_modules/

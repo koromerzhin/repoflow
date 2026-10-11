@@ -35,7 +35,9 @@ _NODE: dict[str, Any] = {
     "author": {"login": "sam.r"},
     "headRefName": "feat/billing",
     "baseRefName": "main",
-    "files": {"changedFiles": 3, "additions": 40, "deletions": 6},
+    "changedFiles": 3,
+    "additions": 40,
+    "deletions": 6,
     "commits": {
         "nodes": [
             {
@@ -52,7 +54,7 @@ _NODE: dict[str, Any] = {
                                 },
                                 {
                                     "__typename": "StatusContext",
-                                    "name": "deploy",
+                                    "context": "deploy",
                                     "state": "PENDING",
                                     "targetUrl": "https://example.com/deploy",
                                 },

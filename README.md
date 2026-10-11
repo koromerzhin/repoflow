@@ -27,7 +27,7 @@ docker compose up --build
 - Interface : http://localhost:5173
 - API : http://localhost:8000 (documentation Swagger : `/docs`)
 - Par défaut : **mode démonstration** (données fictives, aucun jeton requis)
-  et base SQLite persistée dans un volume Docker.
+  et base SQLite persistée dans le dossier `./data` du dépôt.
 
 Pour brancher des vraies données GitHub, éditer `.env` :
 `REPOFLOW_GITHUB_PROVIDER=github` et renseigner `REPOFLOW_GITHUB_TOKEN`
@@ -199,7 +199,14 @@ docker compose up --build
 - Backend : http://localhost:8000
 - Frontend : http://localhost:5173
 
-La base SQLite est persistée dans un volume Docker nommé.
+La base SQLite est persistée dans le dossier `./data` à la racine du dépôt
+(`repoflow.db` directement accessible sur l'hôte). Le conteneur backend
+tourne en non-root (uid 1001) : si le dossier n'existe pas encore, le créer
+et lui donner la propriété correspondante :
+
+```bash
+mkdir -p data && sudo chown 1001:1001 data
+```
 
 Avec PostgreSQL (profil optionnel) :
 

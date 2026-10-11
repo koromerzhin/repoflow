@@ -32,7 +32,9 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
         author { login }
         headRefName
         baseRefName
-        files { changedFiles additions deletions }
+        changedFiles
+        additions
+        deletions
         commits(last: 1) {
           nodes {
             commit {
@@ -41,7 +43,7 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
                   nodes {
                     __typename
                     ... on CheckRun { name conclusion status detailsUrl }
-                    ... on StatusContext { name state targetUrl }
+                    ... on StatusContext { context state targetUrl }
                   }
                 }
               }
@@ -61,7 +63,6 @@ query($owner: String!, $name: String!, $first: Int!, $after: String) {
 def pull_request_rest(node: dict[str, Any]) -> dict[str, Any]:
     """Convertit un nœud pull request GraphQL en dict au format REST."""
     author = node.get("author") or {}
-    files = node.get("files") or {}
     return {
         "id": node.get("id"),
         "number": node.get("number"),
@@ -69,9 +70,9 @@ def pull_request_rest(node: dict[str, Any]) -> dict[str, Any]:
         "user": {"login": author.get("login")},
         "draft": node.get("isDraft"),
         "mergeable": node.get("mergeable") == "MERGEABLE",
-        "changed_files": files.get("changedFiles"),
-        "additions": files.get("additions"),
-        "deletions": files.get("deletions"),
+        "changed_files": node.get("changedFiles"),
+        "additions": node.get("additions"),
+        "deletions": node.get("deletions"),
         "head": {"ref": node.get("headRefName")},
         "base": {"ref": node.get("baseRefName")},
         "created_at": node.get("createdAt"),
@@ -104,7 +105,7 @@ def checks_from_commit(
             statuses.append(
                 {
                     "state": str(context.get("state") or "").lower(),
-                    "context": context.get("name"),
+                    "context": context.get("context"),
                     "target_url": context.get("targetUrl"),
                 }
             )
