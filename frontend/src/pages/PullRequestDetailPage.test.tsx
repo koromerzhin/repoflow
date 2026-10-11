@@ -98,6 +98,50 @@ describe('PullRequestDetailPage', () => {
     })
   })
 
+  it('propose d’ouvrir la PR sur GitHub dans un nouvel onglet', async () => {
+    vi.mocked(getPullRequestDetail).mockResolvedValue(detail)
+
+    renderPage('/pull-requests/142?repository=acme/web-app')
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    const link = screen.getByRole('link', { name: 'Voir sur GitHub' })
+    expect(link).toHaveAttribute('href', 'https://github.com/acme/web-app/pull/142')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noreferrer')
+  })
+
+  it('affiche le corps de la PR et des revues en Markdown', async () => {
+    vi.mocked(getPullRequestDetail).mockResolvedValue({
+      ...detail,
+      body: '## Contexte\n\nCorrige [la facturation](https://example.com/spec).',
+      reviews: [
+        {
+          id: 'review-1',
+          author: 'lea.b',
+          state: 'approved',
+          body: '- [x] Revu en détail',
+          submitted_at: '2026-01-02T09:00:00Z',
+        },
+      ],
+    })
+
+    renderPage('/pull-requests/142?repository=acme/web-app')
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Contexte' }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('link', { name: 'la facturation' })).toHaveAttribute(
+      'href',
+      'https://example.com/spec',
+    )
+    expect(screen.getByRole('checkbox')).toBeInTheDocument()
+  })
+
   it('affiche une erreur exploitable', async () => {
     const { ApiError } = await import('@/services/apiClient')
     vi.mocked(getPullRequestDetail).mockRejectedValue(

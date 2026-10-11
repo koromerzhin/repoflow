@@ -6,7 +6,9 @@ import httpx
 import pytest
 
 from app.integrations.github.client import GitHubClient
+from app.integrations.github.errors import GitHubRateLimitError
 from app.integrations.github.github_provider import GithubProvider
+from app.integrations.github.types import IssueRecord
 from app.schemas.pull_request import CheckState, PullRequestState, ReviewDecision
 
 
@@ -239,6 +241,59 @@ async def test_list_issues_tous_les_repos(provider: GithubProvider) -> None:
     issues = await provider.list_issues()
     try:
         assert len(issues) == 2
+    finally:
+        await provider.aclose()
+
+
+async def test_list_issues_ignore_un_depot_en_erreur_reseau(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    original = GithubProvider._issues_for
+
+    async def flaky(
+        self: GithubProvider, full_name: str, *, state: str | None
+    ) -> list[IssueRecord]:
+        calls.append(full_name)
+        if full_name == "acme/api":
+            raise httpx.ConnectError("panne simulée")
+        return await original(self, full_name, state=state)
+
+    monkeypatch.setattr(GithubProvider, "_issues_for", flaky)
+    client = GitHubClient(
+        token="secret-token",
+        api_url="https://api.github.com",
+        transport=httpx.MockTransport(_handler),
+    )
+    provider = GithubProvider(token="secret-token", client=client)
+    try:
+        issues = await provider.list_issues()
+        assert {issue.repository_full_name for issue in issues} == {"acme/web-app"}
+        assert calls == ["acme/web-app", "acme/api"]
+    finally:
+        await provider.aclose()
+
+
+async def test_list_issues_propage_une_erreur_fournisseur(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def limited(
+        self: GithubProvider, full_name: str, *, state: str | None
+    ) -> list[IssueRecord]:
+        if full_name == "acme/api":
+            raise GitHubRateLimitError("limite atteinte")
+        return []
+
+    monkeypatch.setattr(GithubProvider, "_issues_for", limited)
+    client = GitHubClient(
+        token="secret-token",
+        api_url="https://api.github.com",
+        transport=httpx.MockTransport(_handler),
+    )
+    provider = GithubProvider(token="secret-token", client=client)
+    try:
+        with pytest.raises(GitHubRateLimitError):
+            await provider.list_issues()
     finally:
         await provider.aclose()
 

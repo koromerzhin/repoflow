@@ -61,8 +61,25 @@ test('les issues exposent libellés, assignés et filtres avancés', async ({ pa
   await expect(page.getByText(/@lea\.b/).first()).toBeVisible()
 
   await page.getByRole('combobox', { name: 'Libellé' }).selectOption('observabilité')
-  await expect(page.getByText(/Échecs intermittents/)).toBeVisible()
+  await expect(page.getByRole('heading', { name: /Échecs intermittents/ })).toBeVisible()
   await expect(page.getByText(/réinitialisation de mot de passe/)).toHaveCount(0)
+})
+
+test('le corps des issues est rendu en Markdown', async ({ page }) => {
+  await page.goto('/issues')
+  await expect(page.getByRole('heading', { name: 'Constat' }).first()).toBeVisible()
+  await expect(page.locator('li pre').first()).toBeVisible()
+})
+
+test('le détail d’une PR propose un lien GitHub et rend le Markdown', async ({ page }) => {
+  await page.goto('/pull-requests/130?repository=acme%2Fweb-app')
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+
+  const github = page.getByRole('link', { name: 'Voir sur GitHub' })
+  await expect(github).toHaveAttribute('href', 'https://github.com/acme/web-app/pull/130')
+  await expect(github).toHaveAttribute('target', '_blank')
+
+  await expect(page.getByRole('heading', { name: 'Contexte' })).toBeVisible()
 })
 
 test('la langue et le thème persistent', async ({ page }) => {

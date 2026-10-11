@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { AsyncState } from '@/components/AsyncState'
 import { AutoRefreshSelect } from '@/components/AutoRefreshSelect'
 import { FilterBar } from '@/components/FilterBar'
+import { Markdown } from '@/components/Markdown'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { RepositoryCombobox } from '@/components/RepositoryCombobox'
@@ -280,6 +281,11 @@ export function IssuesPage() {
                           {label}
                         </span>
                       ))}
+                    </div>
+                  ) : null}
+                  {issue.body ? (
+                    <div className="mt-3 border-t border-slate-800 pt-3">
+                      <Markdown size="sm">{issue.body}</Markdown>
                     </div>
                   ) : null}
                 </div>

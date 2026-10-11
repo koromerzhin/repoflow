@@ -220,6 +220,7 @@ def map_issue(
         author=str((data.get("user") or {}).get("login") or ""),
         state=state,
         is_pull_request=is_pull_request,
+        body=data.get("body"),
         labels=_label_names(data.get("labels")),
         assignees=_assignee_logins(data.get("assignees")),
         milestone=str((data.get("milestone") or {}).get("title") or "") or None,

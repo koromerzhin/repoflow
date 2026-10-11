@@ -58,6 +58,7 @@ const issues: IssueListResponse = {
       labels: ['bug', 'authentification'],
       assignees: ['lea.b'],
       milestone: 'Sprint 12',
+      body: '## Constat\n\nLe lien expire après **10 minutes**.\n\n1. Demander une réinitialisation.\n2. Attendre.',
       created_at: '2026-01-01T08:00:00Z',
       updated_at: '2026-01-02T08:00:00Z',
       html_url: 'https://github.com/acme/web-app/issues/201',
@@ -74,6 +75,7 @@ const issues: IssueListResponse = {
       labels: ['bug', 'observabilité'],
       assignees: ['sami.h'],
       milestone: 'Sprint 13',
+      body: null,
       created_at: '2026-01-01T09:00:00Z',
       updated_at: '2026-01-02T09:00:00Z',
       html_url: 'https://github.com/acme/api-gateway/issues/53',
@@ -108,6 +110,21 @@ describe('IssuesPage', () => {
     expect(screen.getByText('#201')).toBeInTheDocument()
     expect(screen.getAllByText('Ouverte')).toHaveLength(2)
     expect(getIssues).toHaveBeenCalled()
+  })
+
+  it('affiche le corps des issues en Markdown', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('heading', { level: 2, name: 'Constat' }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getByText('10 minutes').tagName).toBe('STRONG')
+    expect(screen.getByText('Demander une réinitialisation.')).toBeInTheDocument()
   })
 
   it('affiche un état vide quand aucune issue ne correspond', async () => {

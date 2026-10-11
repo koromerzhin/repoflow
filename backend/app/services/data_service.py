@@ -224,6 +224,7 @@ def issue_to_schema(issue: IssueRecord, *, is_demo: bool) -> Issue:
         author=issue.author,
         state=issue.state,
         is_pull_request=issue.is_pull_request,
+        body=issue.body,
         labels=list(issue.labels),
         assignees=list(issue.assignees),
         milestone=issue.milestone,

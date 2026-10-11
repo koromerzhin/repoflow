@@ -1,8 +1,10 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
+import { Markdown } from '@/components/Markdown'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import {
@@ -59,7 +61,22 @@ export function PullRequestDetailPage() {
       <PageHeader
         title={pr ? `${pr.title}` : `Pull request #${number}`}
         description={repository}
-        actions={<RefreshButton onClick={detail.refresh} loading={detail.loading} />}
+        actions={
+          <div className="flex items-center gap-2">
+            {pr ? (
+              <a
+                href={pr.html_url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 transition hover:border-sky-600 hover:text-sky-300 focus:border-sky-500 focus:outline-none"
+              >
+                {t('detail.viewOnGitHub')}
+                <ExternalLink className="size-3.5" aria-hidden />
+              </a>
+            ) : null}
+            <RefreshButton onClick={detail.refresh} loading={detail.loading} />
+          </div>
+        }
       />
 
       <AsyncState
@@ -85,8 +102,8 @@ export function PullRequestDetailPage() {
               </p>
 
               {pr.body ? (
-                <div className="mt-4 whitespace-pre-wrap rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300">
-                  {pr.body}
+                <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+                  <Markdown>{pr.body}</Markdown>
                 </div>
               ) : null}
 
@@ -107,17 +124,6 @@ export function PullRequestDetailPage() {
                     </ul>
                   </div>
                 )}
-              </div>
-
-              <div className="mt-4">
-                <a
-                  href={pr.html_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-sky-400 hover:text-sky-300"
-                >
-                  {t('detail.viewOnGitHub')}
-                </a>
               </div>
             </section>
 
@@ -183,9 +189,9 @@ export function PullRequestDetailPage() {
                         <ReviewStateBadge state={review.state} />
                       </div>
                       {review.body ? (
-                        <p className="mt-2 whitespace-pre-wrap text-sm text-slate-400">
-                          {review.body}
-                        </p>
+                        <div className="mt-2 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
+                          <Markdown size="sm">{review.body}</Markdown>
+                        </div>
                       ) : null}
                       {review.submitted_at ? (
                         <p className="mt-2 text-xs text-slate-500">

@@ -61,6 +61,17 @@ def test_issues_exposent_labels_assignes_jalon(client: TestClient) -> None:
     assert item["milestone"] == "Sprint 12"
 
 
+def test_issues_exposent_le_corps_markdown(client: TestClient) -> None:
+    payload = _get_issues(client)
+    items = payload["items"]
+    assert items, "la démonstration doit exposer des issues"
+    for item in items:
+        assert item["body"] is not None
+        assert "Données de démonstration" in item["body"]
+        # Le corps est du Markdown structuré (titres, listes ou tableaux).
+        assert any(marker in item["body"] for marker in ("##", "- [", "| -", "**"))
+
+
 def test_issues_recherche_serveur_par_label(client: TestClient) -> None:
     payload = _get_issues(client, search="observabilité")
     assert payload["total"] == 1

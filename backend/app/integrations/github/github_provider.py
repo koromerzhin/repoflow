@@ -10,9 +10,13 @@ effectuée : ce fournisseur est strictement en lecture seule.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 
-from app.core.errors import NotFoundError
+import httpx
+
+from app.core.config import get_settings
+from app.core.errors import NotFoundError, ProviderError
 from app.core.logging import get_logger
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.graphql import PULL_REQUESTS_QUERY, pull_requests_page
@@ -191,17 +195,44 @@ class GithubProvider:
         repository_full_name: str | None = None,
         state: str | None = None,
     ) -> list[IssueRecord]:
-        """Issues des dépôts accessibles (hors pull requests)."""
+        """Issues des dépôts accessibles (hors pull requests).
+
+        Les dépôts sont interrogés en parallèle (concurrence bornée et budget
+        par dépôt, comme ``provider.collect``) : un dépôt lent ou en échec
+        réseau est ignoré plutôt que de faire échouer toute la liste ; les
+        erreurs applicatives (limite de requêtes, authentification) remontent.
+        """
         if repository_full_name:
             full_names = [repository_full_name]
         else:
             repositories = await self.list_repositories()
             full_names = [repository.full_name for repository in repositories]
 
-        issues: list[IssueRecord] = []
-        for full_name in full_names:
-            issues.extend(await self._issues_for(full_name, state=state))
-        return issues
+        settings = get_settings()
+        semaphore = asyncio.Semaphore(settings.github_max_concurrency)
+        timeout = settings.github_collection_timeout
+
+        async def fetch(full_name: str) -> list[IssueRecord]:
+            async with semaphore:
+                try:
+                    return await asyncio.wait_for(
+                        self._issues_for(full_name, state=state), timeout=timeout
+                    )
+                except TimeoutError:
+                    logger.warning("Délai dépassé pour les issues de %s ; dépôt ignoré.", full_name)
+                    return []
+                except ProviderError:
+                    raise
+                except httpx.HTTPError as exc:
+                    logger.warning(
+                        "Échec réseau pour les issues de %s ; dépôt ignoré (%s).",
+                        full_name,
+                        exc,
+                    )
+                    return []
+
+        results = await asyncio.gather(*(fetch(full_name) for full_name in full_names))
+        return [issue for group in results for issue in group]
 
     async def _issues_for(self, full_name: str, *, state: str | None) -> list[IssueRecord]:
         owner, _, name = full_name.partition("/")

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -40,7 +40,9 @@ def test_snapshot_par_depot_et_idempotence(client: TestClient) -> None:
     first = client.get("/api/v1/snapshots").json()
     assert first["total"] == 3
     assert all(item["data_source"] == "demo" for item in first["items"])
-    assert all(item["snapshot_date"] == date.today().isoformat() for item in first["items"])
+    assert all(
+        item["snapshot_date"] == datetime.now(UTC).date().isoformat() for item in first["items"]
+    )
 
     # Une seconde passe le même jour met à jour, jamais dupliquée.
     _record()
@@ -70,11 +72,11 @@ def test_filtre_par_depot(client: TestClient) -> None:
 def test_filtre_since_exclusif(client: TestClient) -> None:
     _record()
 
-    futur = (date.today() + timedelta(days=1)).isoformat()
+    futur = (datetime.now(UTC).date() + timedelta(days=1)).isoformat()
     payload = client.get("/api/v1/snapshots", params={"since": futur}).json()
     assert payload["total"] == 0
 
-    aujourdhui = date.today().isoformat()
+    aujourdhui = datetime.now(UTC).date().isoformat()
     payload = client.get("/api/v1/snapshots", params={"since": aujourdhui}).json()
     assert payload["total"] == 3
 

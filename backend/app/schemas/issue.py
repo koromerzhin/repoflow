@@ -25,6 +25,9 @@ class Issue(BaseModel):
     author: str
     state: IssueState
     is_pull_request: bool = Field(default=False, description="Toujours faux pour cet endpoint.")
+    body: str | None = Field(
+        default=None, description="Corps de l'issue, en Markdown (GitHub Flavored)."
+    )
     labels: list[str] = Field(default_factory=list, description="Libellés de l'issue.")
     assignees: list[str] = Field(default_factory=list, description="Logins des assignés.")
     milestone: str | None = Field(default=None, description="Titre du jalon, si défini.")

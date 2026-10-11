@@ -31,6 +31,40 @@ from app.schemas.pull_request import (
 _REVIEWERS = ["alice.dupont", "benoit.l", "chloe.m", "david.k"]
 
 
+def _issue_body(title: str, number: int) -> str:
+    """Corps Markdown déterministe pour une issue de démonstration."""
+    if number % 3 == 0:
+        return (
+            f"## Constat\n\n"
+            f"« {title} » est observé de façon intermittente.\n\n"
+            "### Étapes de reproduction\n\n"
+            "1. Naviguer vers la page concernée.\n"
+            "2. Attendre le rafraîchissement automatique.\n\n"
+            "```bash\n"
+            "curl -s http://localhost:8000/api/health\n"
+            "```\n\n"
+            "> Données de démonstration : aucun contenu réel de GitHub."
+        )
+    if number % 3 == 1:
+        return (
+            f"### Contexte\n\n"
+            f"L'équipe rapporte : « {title} ».\n\n"
+            "- [x] Reproduit en environnement de démonstration\n"
+            "- [ ] À confirmer ailleurs\n\n"
+            "| Priorité | Effort |\n"
+            "| -------- | ------ |\n"
+            "| Moyenne  | 3 pts  |\n\n"
+            "> Données de démonstration."
+        )
+    return (
+        f"**Résumé** — {title}.\n\n"
+        "- Impact : expérience utilisateur\n"
+        "- Piste : mutualiser le chargement des données\n\n"
+        "Voir la [documentation interne fictive](https://example.com/docs).\n\n"
+        "> Données de démonstration."
+    )
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -461,6 +495,11 @@ class DemoProvider:
                 updated_at=now - 10 * day,
                 html_url="https://github.com/acme/client-sdk/issues/9",
             ),
+        ]
+
+        issues = [
+            issue.model_copy(update={"body": _issue_body(issue.title, issue.number)})
+            for issue in issues
         ]
 
         return repos, prs, issues
