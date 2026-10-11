@@ -108,9 +108,6 @@ Les listes PR/issues rendent tous les éléments. Si les volumes grandissent,
 `@tanstack/react-virtual` sur les conteneurs de cartes.
 *Effort : S.* **À évaluer** : volumes actuels faibles, recherche serveur en
 place.
-Les listes PR/issues rendent tous les éléments. Si les volumes grandissent,
-`@tanstack/react-virtual` sur les conteneurs de cartes.
-*Effort : S (une fois le besoin confirmé).*
 
 ### 14. ✅ Filtres issues avancés
 Ajouter libellés, assignés et jalons (`GET /repos/{o}/{r}/issues` les expose
@@ -218,20 +215,56 @@ et branchement d'une tendance sur chaque carte du tableau de bord (fenêtre de
 30 jours). La sparkline reste masquée tant que l'historique compte moins de
 deux points (worker désactivé par défaut, aucun seed en mode démo).
 
-### 26. CI : build Docker et dépendances
+### 26. ✅ CI : build Docker et dépendances — réalisé le 11/10/2026
 La CI teste le code mais jamais les images Docker (le build a déjà échoué en
 dehors d'elle) et rien ne surveille les dépendances. Ajouter un job
 `docker build` des deux images et activer Dependabot (ou Renovate).
 *Effort : S-M.*
 
-### 27. Messages d'audit figés dans une langue
+*Réalisé* : job `docker` (`.github/workflows/ci.yml`) qui construit les images
+backend et frontend via `docker/build-push-action` avec cache GitHub Actions.
+`/.github/dependabot.yml` surveille les actions GitHub, pip (`/backend`),
+npm (`/frontend`) et les images de base des Dockerfiles (mises à jour
+hebdomadaires, regroupées).
+
+### 27. ✅ Messages d'audit localisés à l'affichage — réalisé le 11/10/2026
 Les messages d'audit sont rédigés en français au moment de l'écriture : un
 utilisateur anglophone relit un journal en français. Décider : stocker le
 code + paramètres et traduire à l'affichage, ou documenter la limitation.
 *Effort : M (décision de design).*
 
-### 28. Accessibilité : contrastes du thème clair
+*Décision* : les messages restent dérivés du code (`event_type`) et des
+paramètres (`payload`), déjà persistés, et sont **reconstruits à l'affichage**
+dans la langue du lecteur. Les gabarits sont ajoutés au catalogue
+`app/core/i18n.py` (`audit.*`, `audit.reason.*`) ; `audit_service.to_schema`
+prend la locale issue de `Accept-Language` (repli sur le message persisté si
+un paramètre manque ou si le type est inconnu). Le payload a été enrichi de
+`error_message` pour `analysis_error` et `merge_failed`. Aucune migration :
+le journal reste immuable et rétrocompatible.
+
+### 28. ✅ Accessibilité : contrastes du thème clair — réalisé le 11/10/2026
 Le thème clair a été produit par inversion de palette sans vérification des
 contrastes (WCAG AA). Auditer les paires texte/fond principales et ajuster
 les tokens si nécessaire.
 *Effort : S.*
+
+*Audit* : conversion OKLCH → sRGB puis calcul du ratio WCAG pour les paires
+principales. Constats et corrections dans `frontend/src/index.css`
+(`html.theme-light`) :
+
+| Paire | Avant | Après |
+| --- | --- | --- |
+| Texte de badge `sky-300` / `sky-500/15` | 3,36 | 4,61 |
+| Texte de badge `amber-300` / `amber-500/15` | 4,38 | 5,03 |
+| Texte de badge `violet-300` / `violet-500/15` | 1,49 | 5,04 |
+| Bouton « texte blanc / `sky-600` » | 4,02 | 4,85 |
+| Alerte `red-100` / `red-900/30` | 1,48 | 8,62 |
+| Panneau `red-200` / `red-950/40` | 3,15 | 7,83 |
+| Bandeau `amber-200` / `amber-950/30` | 3,49 | 6,42 |
+| Bordure de champ `slate-700` / fond | 1,42 | 3,21 |
+| Focus `sky-500` / fond | 2,59 | 3,84 |
+
+Les fonds d'alerte (rouge/ambre) et `slate-700` sont désormais éclaircis dans
+le thème clair, les accents de texte assombris, et `violet-300` ajouté aux
+surcharges. Toutes les paires principales atteignent AA (texte ≥ 4,5:1,
+non-texte ≥ 3:1).

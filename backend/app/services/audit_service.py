@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import DEFAULT_LOCALE, render_message
 from app.models.entities import AuditEvent
 from app.schemas.audit import AuditEventRead
 
@@ -51,15 +52,47 @@ def _parse_payload(raw: str | None) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def to_schema(event: AuditEvent) -> AuditEventRead:
-    """Convertit une entrée ORM en schéma d'API."""
+def _message_params(event: AuditEvent) -> dict[str, Any]:
+    """Construit les paramètres d'interpolation d'un message d'audit.
+
+    Le ``payload`` persisté porte les données structurées ; on y ajoute le
+    numéro de PR et le compteur de blocages dérivés. Ces paramètres
+    permettent de reconstruire le message à l'affichage, dans la langue du
+    lecteur, plutôt que de figer une phrase à l'écriture.
+    """
+    params: dict[str, Any] = dict(_parse_payload(event.payload) or {})
+    if event.pull_request_number is not None:
+        params["number"] = event.pull_request_number
+    blockers = params.get("blockers")
+    if isinstance(blockers, list):
+        params.setdefault("count", len(blockers))
+    return params
+
+
+def localized_message(event: AuditEvent, locale: str = DEFAULT_LOCALE) -> str:
+    """Rend le message d'audit dans la langue demandée.
+
+    Le message est reconstruit à partir du code (``event_type``) et des
+    paramètres (``payload``) ; à défaut de gabarit ou de paramètre, on
+    retombe sur le message persisté (rétrocompatibilité des entrées
+    existantes).
+    """
+    params = _message_params(event)
+    reason = params.get("reason")
+    if isinstance(reason, str):
+        params["reason"] = render_message(f"audit.reason.{reason}", locale, None, reason)
+    return render_message(f"audit.{event.event_type}", locale, params, event.message)
+
+
+def to_schema(event: AuditEvent, locale: str = DEFAULT_LOCALE) -> AuditEventRead:
+    """Convertit une entrée ORM en schéma d'API, message localisé."""
     return AuditEventRead(
         id=event.id,
         event_type=event.event_type,
         repository_full_name=event.repository_full_name,
         pull_request_number=event.pull_request_number,
         actor=event.actor,
-        message=event.message,
+        message=localized_message(event, locale),
         payload=_parse_payload(event.payload),
         occurred_at=event.occurred_at,
     )

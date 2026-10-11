@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from app.api.deps import DbDep
+from app.core.i18n import DEFAULT_LOCALE, get_locale
 from app.schemas.audit import AuditListResponse
 from app.services import audit_service
 
@@ -13,6 +14,7 @@ router = APIRouter(tags=["audit"])
 
 @router.get("/audit", response_model=AuditListResponse)
 async def list_audit(
+    request: Request,
     session: DbDep,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -39,8 +41,9 @@ async def list_audit(
         repository_full_name=repository,
     )
     next_cursor = events[-1].id if len(events) == limit else None
+    locale = get_locale(request) or DEFAULT_LOCALE
     return AuditListResponse(
-        items=[audit_service.to_schema(event) for event in events],
+        items=[audit_service.to_schema(event, locale) for event in events],
         total=total,
         next_cursor=next_cursor,
     )

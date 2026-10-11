@@ -84,6 +84,44 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "Le check obligatoire « {name} » n'est pas réussi.",
         "en": 'The required check "{name}" did not succeed.',
     },
+    # Messages du journal d'audit. Le code est le ``event_type`` et les
+    # paramètres proviennent du ``payload`` persisté (voir audit_service).
+    "audit.analysis": {
+        "fr": "Analyse terminée : {pull_requests} PR, {eligible} éligible(s), {merged} fusion(s).",
+        "en": "Analysis finished: {pull_requests} PR(s), {eligible} eligible, {merged} merged.",
+    },
+    "audit.analysis_error": {
+        "fr": "Analyse impossible pour PR #{number} : {error_message}",
+        "en": "Analysis impossible for PR #{number}: {error_message}",
+    },
+    "audit.merge_blocked": {
+        "fr": "PR #{number} non éligible ({count} blocage(s)).",
+        "en": "PR #{number} not eligible ({count} blocker(s)).",
+    },
+    "audit.merge_skipped": {
+        "fr": "Fusion de PR #{number} différée ({reason}).",
+        "en": "Merge of PR #{number} deferred ({reason}).",
+    },
+    "audit.merge_succeeded": {
+        "fr": "PR #{number} fusionnée (squash).",
+        "en": "PR #{number} merged (squash).",
+    },
+    "audit.merge_failed": {
+        "fr": "Échec de fusion de PR #{number} : {error_message}",
+        "en": "Failed to merge PR #{number}: {error_message}",
+    },
+    "audit.reason.kill_switch": {
+        "fr": "arrêt d'urgence actif",
+        "en": "emergency stop engaged",
+    },
+    "audit.reason.global_disabled": {
+        "fr": "fusion automatique désactivée globalement",
+        "en": "auto-merge disabled globally",
+    },
+    "audit.reason.rule_disabled": {
+        "fr": "fusion automatique désactivée sur la règle",
+        "en": "auto-merge disabled on the rule",
+    },
 }
 
 

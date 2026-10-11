@@ -262,7 +262,6 @@ export const fr = {
     allEvents: 'Tous les événements',
     empty: 'Aucun événement dans le journal pour ce filtre.',
     announcement: '{{total}} événement(s) journalisé(s).',
-    reason: 'Motif : {{reason}}',
     blockers: 'Blocages : {{list}}',
     commit: 'Commit : {{sha}}',
   },

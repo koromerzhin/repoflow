@@ -130,7 +130,11 @@ async def _analyze_repository(
                 message=f"Analyse impossible pour PR #{pr.number} : {exc.message}",
                 repository_full_name=config.full_name,
                 pull_request_number=pr.number,
-                payload={"rule_id": rule.id, "error": exc.code},
+                payload={
+                    "rule_id": rule.id,
+                    "error": exc.code,
+                    "error_message": exc.message,
+                },
             )
             continue
 
@@ -189,7 +193,7 @@ async def _analyze_repository(
                 message=f"Échec de fusion de PR #{pr.number} : {result.message}",
                 repository_full_name=config.full_name,
                 pull_request_number=pr.number,
-                payload={"rule_id": rule.id},
+                payload={"rule_id": rule.id, "error_message": result.message},
             )
 
 

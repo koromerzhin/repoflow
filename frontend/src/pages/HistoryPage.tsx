@@ -27,9 +27,6 @@ function payloadSummary(event: AuditEvent, t: TFunction): string | null {
   if (!payload) {
     return null
   }
-  if (typeof payload.reason === 'string') {
-    return t('history.reason', { reason: payload.reason })
-  }
   if (Array.isArray(payload.blockers) && payload.blockers.length > 0) {
     return t('history.blockers', { list: payload.blockers.join(', ') })
   }

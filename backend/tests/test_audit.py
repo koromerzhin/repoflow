@@ -110,6 +110,104 @@ def test_limite_invalide(client: TestClient) -> None:
     assert client.get("/api/v1/audit", params={"limit": 0}).status_code == 422
 
 
+def test_message_localise_en_francais(client: TestClient, session: Session) -> None:
+    audit_service.record(
+        session,
+        event_type="analysis",
+        message="Analyse terminée : 3 PR, 1 éligible(s), 1 fusion(s).",
+        payload={
+            "repositories": 1,
+            "pull_requests": 3,
+            "eligible": 1,
+            "blocked": 0,
+            "merged": 1,
+            "skipped": 0,
+            "errors": 0,
+        },
+    )
+    session.commit()
+
+    items = client.get("/api/v1/audit").json()["items"]
+    assert items[0]["message"] == "Analyse terminée : 3 PR, 1 éligible(s), 1 fusion(s)."
+
+
+def test_message_localise_en_anglais(client: TestClient, session: Session) -> None:
+    audit_service.record(
+        session,
+        event_type="analysis",
+        message="Analyse terminée : 3 PR, 1 éligible(s), 1 fusion(s).",
+        payload={"pull_requests": 3, "eligible": 1, "merged": 1},
+    )
+    session.commit()
+
+    items = client.get("/api/v1/audit", headers={"Accept-Language": "en"}).json()["items"]
+    assert items[0]["message"] == "Analysis finished: 3 PR(s), 1 eligible, 1 merged."
+
+
+def test_motif_de_diffusion_localise(client: TestClient, session: Session) -> None:
+    audit_service.record(
+        session,
+        event_type="merge_skipped",
+        message="Fusion de PR #7 différée (kill_switch).",
+        repository_full_name="acme/web-app",
+        pull_request_number=7,
+        payload={"reason": "kill_switch", "rule_id": 3},
+    )
+    session.commit()
+
+    fr = client.get("/api/v1/audit").json()["items"][0]["message"]
+    assert fr == "Fusion de PR #7 différée (arrêt d'urgence actif)."
+
+    en = client.get("/api/v1/audit", headers={"Accept-Language": "en"}).json()["items"][0][
+        "message"
+    ]
+    assert en == "Merge of PR #7 deferred (emergency stop engaged)."
+
+
+def test_compteur_de_blocages_derive_du_payload(client: TestClient, session: Session) -> None:
+    audit_service.record(
+        session,
+        event_type="merge_blocked",
+        message="PR #5 non éligible (2 blocage(s)).",
+        repository_full_name="acme/web-app",
+        pull_request_number=5,
+        payload={"blockers": ["not_approved", "check_not_success"]},
+    )
+    session.commit()
+
+    items = client.get("/api/v1/audit").json()["items"]
+    assert items[0]["message"] == "PR #5 non éligible (2 blocage(s))."
+
+
+def test_repli_sur_message_persiste_si_parametre_absent(
+    client: TestClient, session: Session
+) -> None:
+    audit_service.record(
+        session,
+        event_type="merge_failed",
+        message="Échec de fusion de PR #9 : connexion perdue",
+        repository_full_name="acme/web-app",
+        pull_request_number=9,
+        payload={"rule_id": 2},
+    )
+    session.commit()
+
+    items = client.get("/api/v1/audit", headers={"Accept-Language": "en"}).json()["items"]
+    assert items[0]["message"] == "Échec de fusion de PR #9 : connexion perdue"
+
+
+def test_repli_sur_message_persiste_si_type_inconnu(session: Session) -> None:
+    event = audit_service.record(
+        session,
+        event_type="evenement_inconnu",
+        message="Message libre.",
+        payload={"foo": "bar"},
+    )
+    session.commit()
+
+    assert audit_service.localized_message(event, "en") == "Message libre."
+
+
 def test_purge_retention(session: Session) -> None:
     ancienne = audit_service.record(
         session,

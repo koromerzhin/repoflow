@@ -260,7 +260,6 @@ export const en = {
     allEvents: 'All events',
     empty: 'No event in the log for this filter.',
     announcement: '{{total}} event(s) logged.',
-    reason: 'Reason: {{reason}}',
     blockers: 'Blockers: {{list}}',
     commit: 'Commit: {{sha}}',
   },
