@@ -1,4 +1,6 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 
 type Size = 'base' | 'sm'
@@ -60,6 +62,23 @@ const components: Components = {
   ),
   hr: () => <hr className="my-4 border-slate-800" />,
   del: ({ children }) => <del className="text-slate-500 line-through">{children}</del>,
+  details: ({ children }) => (
+    <details className="my-3 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+      {children}
+    </details>
+  ),
+  summary: ({ children }) => (
+    <summary className="cursor-pointer select-none font-medium text-slate-200">
+      {children}
+    </summary>
+  ),
+  kbd: ({ children }) => (
+    <kbd className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[0.85em] text-slate-200">
+      {children}
+    </kbd>
+  ),
+  sub: ({ children }) => <sub>{children}</sub>,
+  sup: ({ children }) => <sup>{children}</sup>,
   input: ({ checked }) => (
     <input
       type="checkbox"
@@ -83,7 +102,11 @@ export function Markdown({ children, size = 'base' }: MarkdownProps) {
         size === 'base' ? 'text-sm text-slate-300' : 'text-xs text-slate-400'
       }
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw, rehypeSanitize]}
+        components={components}
+      >
         {children}
       </ReactMarkdown>
     </div>
