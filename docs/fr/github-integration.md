@@ -5,13 +5,13 @@ Ce document décrit comment configurer RepoFlow avec l'API GitHub (vs mode démo
 ## Modes de fonctionnement
 
 - `demo` (défaut) : données simulées, aucun appel réseau. Idéal pour démo/tests.
-- `github_api` : appels à l'API REST/GraphQL GitHub avec token.
+- `github` : appels à l'API REST/GraphQL GitHub avec token.
 
 ## Configuration
 
 1. Créer un Personal Access Token (classic) ou GitHub App (selon besoin)
 2. Définir `.env` :
-   - `REPOFLOW_GITHUB_PROVIDER=github_api`
+   - `REPOFLOW_GITHUB_PROVIDER=github`
    - `REPOFLOW_GITHUB_TOKEN=ghp_xxx`
 3. Redémarrer backend
 

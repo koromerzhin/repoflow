@@ -8,9 +8,15 @@ métier et API.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Iterable
+import asyncio
+from collections.abc import Awaitable
 from typing import Protocol
 
+import httpx
+
+from app.core.config import get_settings
+from app.core.errors import ProviderError
+from app.core.logging import get_logger
 from app.integrations.github.types import (
     IssueRecord,
     MergeResultRecord,
@@ -18,6 +24,8 @@ from app.integrations.github.types import (
     PullRequestRecord,
     RepositoryRecord,
 )
+
+logger = get_logger(__name__)
 
 
 class Provider(Protocol):
@@ -55,12 +63,47 @@ class Provider(Protocol):
 async def collect(provider: Provider) -> tuple[list[RepositoryRecord], list[PullRequestRecord]]:
     """Rassemble les dépôts et pull requests du fournisseur.
 
-    Fonction utilitaire destinée aux services et aux tests. Le paramètre
-    ``repository_full_name`` optionnel de ``list_pull_requests`` est propagé
-    ici pour ne pas coupler les services à chaque signature.
+    Les dépôts sont interrogés en parallèle, avec une concurrence bornée
+    (``REPOFLOW_GITHUB_MAX_CONCURRENCY``) et un budget de temps par dépôt
+    (``REPOFLOW_GITHUB_COLLECTION_TIMEOUT``). Un dépôt lent ou en erreur est
+    ignoré (ses PR sont omises) plutôt que de faire échouer toute la requête :
+    l'agrégat reste exploitable même quand l'API GitHub est partiellement
+    indisponible.
     """
-    repositories: Iterable[RepositoryRecord] = await provider.list_repositories()
-    pull_requests: list[PullRequestRecord] = []
-    for repository in repositories:
-        pull_requests.extend(await provider.list_pull_requests(repository.full_name))
-    return list(repositories), pull_requests
+    settings = get_settings()
+    repositories = list(await provider.list_repositories())
+    if not repositories:
+        return repositories, []
+
+    semaphore = asyncio.Semaphore(settings.github_max_concurrency)
+    timeout = settings.github_collection_timeout
+
+    async def fetch(repository: RepositoryRecord) -> list[PullRequestRecord]:
+        async with semaphore:
+            try:
+                return await asyncio.wait_for(
+                    provider.list_pull_requests(repository.full_name), timeout=timeout
+                )
+            except TimeoutError:
+                logger.warning(
+                    "Délai dépassé pour la récupération des PR de %s (%.1f s) ; dépôt ignoré.",
+                    repository.full_name,
+                    timeout,
+                )
+                return []
+            except ProviderError:
+                # Erreurs applicatives (limite de requêtes, authentification,
+                # permissions) : elles concernent tout le fournisseur et doivent
+                # remonter au client, jamais être masquées.
+                raise
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Échec réseau pour la récupération des PR de %s : %s",
+                    repository.full_name,
+                    exc,
+                )
+                return []
+
+    results = await asyncio.gather(*(fetch(repository) for repository in repositories))
+    pull_requests = [item for group in results for item in group]
+    return repositories, pull_requests

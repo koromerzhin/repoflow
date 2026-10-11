@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     github_timeout: float = 30.0
     github_per_page: int = Field(default=100, ge=1, le=100)
     github_max_pages: int = Field(default=10, ge=1, le=100)
+    # Nombre de dépôts interrogés en parallèle lors de l'agrégation des PR
+    # (borne la charge imposée à l'API GitHub).
+    github_max_concurrency: int = Field(default=8, ge=1, le=50)
+    # Budget maximal, en secondes, alloué à la récupération des PR d'un dépôt.
+    # Au-delà, le dépôt est ignoré et les données déjà collectées sont servies.
+    github_collection_timeout: float = Field(default=30.0, gt=0)
 
     # GitHub App (prioritaire sur le token personnel si configurée).
     # Le jeton d'installation est échangé automatiquement (quota 15 000/h).
@@ -124,6 +130,17 @@ class Settings(BaseSettings):
     def _split_list(cls, value: object) -> object:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+
+    # Une variable d'environnement vide (ex. ``REPOFLOW_GITHUB_APP_ID=`` dans
+    # ``.env``) signifie « non configuré », pas une valeur invalide.
+    @field_validator(
+        "github_app_id", "github_app_private_key", "github_app_installation_id", mode="before"
+    )
+    @classmethod
+    def _empty_str_to_none(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return None
         return value
 
     @property

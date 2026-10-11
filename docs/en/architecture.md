@@ -43,7 +43,20 @@ L'objectif est la simplicité, la testabilité et la prévisibilité (aucune fus
 - `audit_logs` : journal immuable des événements (type, payload sérialisé, PR, acteur, horodatage). Purge selon rétention.
 - `daily_snapshots` : agrégats quotidiens (ouverture, prêtes à fusionner, échecs de checks, issues ouvertes) par dépôt/date.
 
-Les données de démonstration sont signalées par `is_demo: true` / `data_source: "demo"` dans les réponses.
+Demo data is always identifiable via `is_demo: true` / `data_source: "demo"` in responses.
+
+## GitHub data collection
+
+Tracked repositories are not duplicated in the database: pull requests and
+issues are read on demand from the provider, then cached in memory
+(`REPOFLOW_CACHE_TTL_SECONDS`, `?refresh=true` to force a reload).
+
+Aggregation (`provider.collect`) queries repositories **in parallel**, with
+bounded concurrency (`REPOFLOW_GITHUB_MAX_CONCURRENCY`) and a per-repository
+time budget (`REPOFLOW_GITHUB_COLLECTION_TIMEOUT`). A slow repository or a
+**network** failure is skipped without failing the whole request; application
+errors (rate limit, authentication, permissions) are propagated as-is to the
+client.
 
 ## Analysis worker
 

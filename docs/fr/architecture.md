@@ -45,6 +45,19 @@ L'objectif est la simplicité, la testabilité et la prévisibilité (aucune fus
 
 Les données de démonstration sont signalées par `is_demo: true` / `data_source: "demo"` dans les réponses.
 
+## Collecte des données GitHub
+
+Les dépôts suivis ne sont pas dupliqués en base : les PR/issues sont lus à la
+demande auprès du fournisseur, puis mis en cache mémoire
+(`REPOFLOW_CACHE_TTL_SECONDS`, `?refresh=true` pour forcer).
+
+L'agrégation (`provider.collect`) interroge les dépôts **en parallèle**, avec
+une concurrence bornée (`REPOFLOW_GITHUB_MAX_CONCURRENCY`) et un budget de
+temps par dépôt (`REPOFLOW_GITHUB_COLLECTION_TIMEOUT`). Un dépôt lent ou en
+échec **réseau** est ignoré sans faire échouer la requête ; en revanche les
+erreurs applicatives (limite de requêtes, authentification, permissions)
+remontent telles quelles au client.
+
 ## Worker d'analyse
 
 - Exécuté périodiquement (`REPOFLOW_WORKER_ENABLED`, intervalle configurable). Peut tourner en mode « one-shot ».
