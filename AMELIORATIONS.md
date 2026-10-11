@@ -1,208 +1,187 @@
 # Pistes d'amélioration — RepoFlow
 
-Analyse du 11/10/2026 (branche `develop`, commit `fa5fbbd`).
+Analyse du 12/10/2026 (branche `develop`). Réinitialisation du document :
+les pistes précédentes réalisées sont archivées en fin de fichier, la liste
+ci-dessous ne contient que les **suggestions encore ouvertes**, classées par
+priorité (P0 > P3) et effort (S < 1 j, M 1-3 j, L > 3 j).
 
-Les pistes 1 à 28 sont réalisées ; seules 12 (temps réel) et 13
-(virtualisation) restent différées et sont reprises plus bas. Cette nouvelle
-série recense les manques encore ouverts, classés par priorité et par rapport
-valeur/effort (S < 1 j, M 1-3 j, L > 3 j).
+État à date : backend 264 tests (couverture ~93,7 %), frontend 135 tests +
+8 E2E (couverture 89 % lignes / 81 % branches), CI complète (lint, tests,
+migrations Alembic, build, E2E), Docker avec sondes `live`/`ready` et données
+persistées dans `./data`.
 
-À date : backend 235 tests (couverture 93,55 %), frontend 104 tests + 4 E2E,
-CI lint + tests + migrations + build Docker, Dependabot actif.
+## P0 — Sécurité et exploitation (à traiter en priorité)
 
-## P0 — Sécurité (à traiter en priorité)
+### 1. Comptes utilisateurs et rôles
+Le jeton porteur partagé (`REPOFLOW_API_TOKEN`) protège l'instance, mais
+l'identité reste unique : impossible de savoir **qui** a fusionné ou engagé
+l'arrêt d'urgence. Introduire un compte par utilisateur et un rôle
+(lecteur / opérateur / admin) : l'arrêt d'urgence et l'écriture GitHub
+réservés aux opérateurs/admins, le journal d'audit enregistrant l'identité.
+*Fichiers : `app/api/deps.py`, `app/core/security.py`, modèle `users` +
+migration, `frontend/src/hooks/useAuth.ts`, `AuthGate`. Effort : L.*
 
-### 29. Authentification et contrôle d'accès ✅
-RepoFlow n'a **aucune authentification** : interroger l'API ou agir sur les
-routes exposées est possible sans identité. Les routes sensibles sont
-publiques — arrêt d'urgence, configs d'automatisation, journal d'audit — alors
-que le CORS est ouvert avec `allow_credentials=True`.
-Étapes : un jeton porteur (`REPOFLOW_API_TOKEN`, en-tête `Authorization`)
-protège déjà l'instance ; ensuite seulement, un compte par utilisateur et un
-rôle (lecteur / opérateur / admin) pour restreindre l'arrêt d'urgence et
-l'écriture GitHub.
-*Fichiers : `backend/app/api/deps.py`, `app/core/config.py`, middleware
-d'authentification, `frontend/src/services/apiClient.ts`, `AppLayout`. Effort : L.*
+### 2. Sauvegarde de la base `./data`
+La base SQLite vit dans un bind mount sans aucune stratégie de sauvegarde :
+une suppression ou une corruption perd configs, règles, audit et snapshots.
+Ajouter une sauvegarde automatique (`sqlite3 ... .backup` en cron conteneurisé
+ou Litestream vers un stockage externe) **et un test de restauration**
+documenté.
+*Fichiers : `docker-compose.yml` (service `backup`), doc `user-guide`. Effort : S.*
 
-## P1 — Court terme (rapides et à forte valeur)
+### 3. Profil « production » durci
+Plusieurs protections sont désactivées par défaut : `rate_limit_enabled=false`,
+`hsts_enabled=false`, CORS ouvert en développement. Fournir un profil compose
+`production` (rate limiting actif, HSTS derrière HTTPS, CORS restreint à
+l'origine du frontend, `environment=production`) et un `docker-compose.prod.yml`
+documenté.
+*Fichiers : `docker-compose.yml`, `.env.example`, `app/core/config.py`. Effort : S-M.*
 
-### 30. Sondes liveness/readiness et healthcheck des services ✅
-`backend` et `frontend` n'ont pas de `healthcheck` dans `docker-compose.yml`
-(seuls `postgres` et `redis` en ont). `/api/health` vérifie la base mais renvoie
-toujours `200` même en `degraded`, et ne distingue pas démarrage de service
-prêt. Ajouter `/api/health/live` (processus vivant) et `/api/health/ready`
-(base + cache + provider), un code `503` quand non-prêt, et les healthchecks
-`depends_on: condition: service_healthy`.
-*Fichiers : `backend/app/api/v1/routes/health.py`, `docker-compose.yml`. Effort : S.*
+## P1 — Court terme (forte valeur, faible effort)
 
-### 31. Métriques métier (pas seulement HTTP) ✅
-`app/core/metrics.py` n'expose que des compteurs HTTP. Aucune visibilité sur
-l'activité réelle : fusions tentées/réussies/échouées, passes du worker,
-appels provider (rest/graphql), évictions cache, anomalies GitHub. Ajouter des
-compteurs `repoflow_merges_total`, `repoflow_worker_runs_total`,
-`repoflow_provider_requests_total`, `repoflow_cache_events_total`.
-*Fichiers : `core/metrics.py`, `services/analysis_service.py`, `worker.py`,
-`core/cache.py`. Effort : S-M.*
+### 4. Visibilité du quota GitHub
+Les réponses GitHub portent `x-ratelimit-remaining`/`x-ratelimit-reset` ; le
+backend les subit (épisodes de 429/503) sans les exposer. Les enregistrer et
+les remonter dans `/api/health/ready` et un badge UI (« quota : 3 200/5 000,
+réinitialisation 14 h 02 »), avec alerte sous un seuil.
+*Fichiers : `integrations/github/client.py`, `routes/health.py`,
+`schemas/health.py`, `frontend` (DashboardPage). Effort : S-M.*
 
-### 32. Histogrammes de latence ✅
-La durée des requêtes est un simple couple somme/compteur (type `summary` sans
-quantiles) : aucune latence p95/p99 n'est calculable côté Prometheus. Passer à
-un histogramme à buckets (`repoflow_http_request_duration_seconds_bucket`).
-*Fichier : `backend/app/core/metrics.py`. Effort : S.*
+### 5. Verrou distribué du worker
+`run_forever` démarre dans chaque réplique : deux instances peuvent exécuter
+la même passe (et la même fusion) en parallèle. Verrou Redis `SET NX EX`
+(dépendance déjà optionnelle, repli mémoire mono-instance) avant `run_once`.
+*Fichiers : `app/worker.py`, `app/core/cache.py`. Effort : M.*
 
-### 33. Export du journal d'audit ✅
-`GET /api/v1/audit` est paginé, mais rien ne permet de sortir les entrées pour
-un audit externe. Ajouter un export CSV/JSON (mêmes filtres que l'UI) avec
-`Content-Disposition`, et un bouton côté interface.
-*Fichiers : `routes/audit.py`, `services/audit_service.py`,
-`frontend/src/pages/HistoryPage.tsx`. Effort : S.*
+### 6. Résilience du worker : backoff, jitter, watchdog
+La boucle dort un intervalle fixe et retente immédiatement après un échec,
+sans jitter ni indicateur de vivacité. Backoff exponentiel plafonné avec
+jitter, et `repoflow_worker_last_success_timestamp` exposé dans `/api/metrics`
+(plus une sonde de stagnation dans `ready`).
+*Fichiers : `app/worker.py`, `app/core/metrics.py`, `routes/health.py`. Effort : M.*
 
-### 34. Thème par défaut selon `prefers-color-scheme` ✅
-Le thème sombre est figé au premier lancement ; seul le basculement manuel est
-persisté. Initialiser le thème depuis la préférence système avant le premier
-rendu (pour éviter le flash), le choix manuel restant prioritaire.
-*Fichiers : `frontend/src/index.css`, hook de thème, `layouts/AppLayout.tsx`.
-Effort : S.*
+### 7. Rétention et agrégation des snapshots
+`daily_snapshots` croît sans limite (une ligne par dépôt et par jour), sans
+équivalent de `REPOFLOW_AUDIT_RETENTION_DAYS`. Ajouter une rétention
+configurable et des rollups semaine/mois pour borner la table.
+*Fichiers : `services/snapshot_service.py`, `worker.py`, `core/config.py`. Effort : S-M.*
 
-### 35. Tests d'accessibilité automatisés ✅
-L'effort P3.28 a corrigé les contrastes, mais rien ne garantit qu'une
-régression ne réintroduira pas un défaut. Ajouter `axe-core` sur les pages
-principales (Vitest) et/ou `@axe-core/playwright` dans le parcours E2E.
-*Fichiers : `frontend/src/**/*.test.tsx`, `frontend/e2e/app.spec.ts`. Effort : S.*
+### 8. Logs structurés (JSON) et suivi d'erreurs
+La journalisation est textuelle alors que `request_id`/`route`/`status`
+existent déjà dans le contexte. Mode JSON optionnel (une ligne = un événement)
+et branchement facultatif Sentry/GlitchTip côté backend **et** frontend
+(`ErrorBoundary` déjà en place pour capturer).
+*Fichiers : `core/logging.py`, `core/request_context.py`, `frontend`. Effort : M.*
 
-### 36. Hygiène du dépôt ✅
-Manquent : fichier `LICENSE` (la licence MIT est annoncée « à venir » dans le
-README), `CHANGELOG.md`, tags/notes de version, `.editorconfig`, et des hooks
-pre-commit (Ruff, ESLint, détection de secrets). Le README mentionne aussi le
-worker « à venir » alors qu'il est exploitable (`python -m app.worker`).
-*Fichiers : racine, `README.md`, `CONTRIBUTING.md`, `backend/pyproject.toml`.
-Effort : S.*
+### 9. Contrôles de sécurité en CI
+Aucun job de sécurité : ajouter `pip-audit`/`npm audit` (dépendances), Bandit
+ou Semgrep (SAST) et Trivy (scan des images Docker), au moins sur `main`.
+*Fichier : `.github/workflows/ci.yml`. Effort : M.*
 
-### 37. Seuil de couverture incohérent dans la CI ✅
-Le commentaire du job frontend annonce « seuil 85 % » alors que
-`frontend/vite.config.ts` applique lignes 80 % / branches 65 %. Aligner le
-libellé (ou relever réellement le seuil : 88 % / 79 % atteints).
-*Fichier : `.github/workflows/ci.yml`. Effort : S.*
+### 10. Webhooks GitHub en complément du polling
+Le worker interroge périodiquement l'API : latence événement → décision et
+consommation de quota. Point d'entrée webhook (signature HMAC `X-Hub-Signature-256`
+vérifiée, secret en config) déclenchant une passe ciblée, le polling restant
+en filet de sécurité.
+*Fichiers : nouvelles routes `webhooks.py`, `services/analysis_service.py`,
+doc `github-integration`. Effort : L.*
 
 ## P2 — Moyen terme (structurants)
 
-### 38. Verrou distribué du worker
-`run_forever` démarre dans **chaque** réplique : avec plusieurs instances, la
-même passe d'analyse (et donc la même fusion) peut s'exécuter en parallèle.
-Prendre un verrou distribué (Redis `SET NX EX`, même dépendance que le rate
-limiter, repli mémoire mono-instance) avant `run_once`.
-*Fichiers : `backend/app/worker.py`, `core/cache.py`/`security.py`. Effort : M.*
+### 11. GraphQL pour les issues et le détail des PR
+Le transport GraphQL (désormais réparé et activable) ne couvre que la liste
+des PR : la liste des issues coûte encore 1 requête REST par dépôt (62), et le
+détail d'une PR 4-5 requêtes. Étendre le transport GraphQL aux issues et au
+détail pour diviser la consommation de quota.
+*Fichiers : `integrations/github/graphql.py`, `github_provider.py`. Effort : M.*
 
-### 39. Tolérance du worker : backoff, jitter, watchdog
-La boucle dort un intervalle fixe et retente immédiatement après un échec, sans
-jitter (risque de synchronisation entre répliques) ni métrique de vivacité.
-Ajouter un backoff exponentiel plafonné avec jitter, et exposer l'heure de
-dernière passe réussie (`repoflow_worker_last_success_timestamp`).
-*Fichier : `backend/app/worker.py`. Effort : M.*
+### 12. Checks requis réels (protections de branche)
+`merge_rules` suppose que tous les checks sont requis faute de lire les
+protections : risque de bloquer (ou laisser passer) à tort. Lire
+`GET /repos/{o}/{r}/branches/{b}/protection`, n'exiger que les contextes
+réellement requis, repli prudent si l'accès est refusé.
+*Fichiers : `integrations/github/`, `services/merge_rules.py`. Effort : M-L.*
 
-### 40. Rétention et agrégation des snapshots
-`daily_snapshots` croît indéfiniment (une ligne par dépôt et par jour) sans
-équivalent de `REPOFLOW_AUDIT_RETENTION_DAYS`. Ajouter une rétention
-configurable et/ou des rollups (semaine/mois) pour borner la table.
-*Fichiers : `services/snapshot_service.py`, `worker.py`, `core/config.py`.
-Effort : S-M.*
-
-### 41. Logs structurés et suivi d'erreurs
-La journalisation est textuelle. Ajouter un mode JSON optionnel (une ligne =
-un événement, champs `request_id`/`route`/`status` déjà disponibles via le
-contexte de requête) et un branchement optionnel vers un collecteur d'erreurs
-(Sentry/GlitchTip) côté backend et frontend.
-*Fichiers : `core/logging.py`, `core/request_context.py`, `frontend`. Effort : M.*
-
-### 42. SAST, audit de dépendances et scan d'images en CI
-La CI n'exécute aucun contrôle de sécurité : ni analyse statique (Bandit /
-Semgrep), ni audit de dépendances (`pip-audit`, `npm audit`), ni scan des images
-Docker (Trivy). Ajouter ces jobs (au minimum sur `main`).
-*Fichier : `.github/workflows/ci.yml`. Effort : M.*
-
-### 43. Checks requis : lire les protections de branche
-`integrations/github/mapping.py:6` suppose que **tous** les checks sont
-obligatoires faute d'accès aux protections. La règle de fusion peut donc
-bloquer (ou laisser passer) à tort. Lire la protection de branche via l'API
-(`GET /repos/{o}/{r}/branches/{b}/protection`) et n'exiger que les contextes
-réellement requis, avec repli sur le comportement prudent actuel.
-*Fichiers : `integrations/github/provider.py`, `services/merge_rules.py`. Effort : M-L.*
-
-### 44. Webhooks GitHub en complément du polling
-Le worker interroge périodiquement l'API : latence entre l'événement et la
-décision, et consommation de quota. Ajouter un point d'entrée webhook
-(signature HMAC vérifiée) qui déclenche une passe ciblée, en conservant le
-polling comme filet de sécurité.
-*Fichiers : nouvelles routes, `services/analysis_service.py`, doc
-`github-integration.md`. Effort : L.*
-
-### 45. Validation de formulaires par schéma
-Les formulaires frontend valident « à la main » (règles dispersées), sans
-reflet exact des schémas Pydantic. Introduire une validation par schéma
-(ex. `zod`) alignée sur les types API et afficher les messages via l'i18n.
-*Fichiers : `frontend/src/pages`, `frontend/src/types/api.ts`. Effort : S-M.*
-
-### 46. Image frontend de production
-Le `frontend/Dockerfile` lance le serveur de développement Vite (`npm run
-dev`) : inadapté à la production (source maps, pas de cache long, pas de
-compression). Ajouter un build multi-étapes servi statiquement (nginx/Caddy)
-avec en-têtes de cache et `healthcheck`.
+### 13. Image frontend de production
+Le conteneur frontend lance `npm run dev` (Vite dev) : inadapté en production.
+Build multi-étapes servi par nginx (cache long sur les assets, compression,
+en-têtes de sécurité), healthcheck conservé.
 *Fichiers : `frontend/Dockerfile`, `docker-compose.yml`. Effort : M.*
 
-### 47. Tests de charge
-Aucun test de performance/montée en charge. Mesurer listes PR/issues, dashboard
-et endpoints d'audit (k6 ou Locust, fournisseur demo) pour objectiver les
-optimisations de cache et détecter les régressions.
-*Fichiers : `backend/tests` ou `perf/`. Effort : M.*
+### 14. Validation des formulaires par schéma
+Les formulaires valident « à la main », sans reflet exact des schémas
+Pydantic. Introduire `zod` aligné sur `src/types/api.ts`, messages via l'i18n.
+*Fichiers : `frontend/src/pages`, `src/types/api.ts`. Effort : S-M.*
+
+### 15. Tests de charge
+Mesurer dashboard, listes PR/issues et audit (k6 ou Locust, fournisseur demo)
+pour objectiver le cache et détecter les régressions de latence.
+*Fichiers : `perf/` ou `backend/tests`. Effort : M.*
+
+### 16. Listes longues : pagination serveur côté UI
+PR/issues accumulent les pages côté client via « Charger plus » (389 issues
+en mémoire) ; le compteur de filtre reste local. Paginer côté UI (pages
+numérotées réutilisant `offset`) et/ou virtualiser si les volumes croissent.
+*Fichiers : `frontend/src/pages/IssuesPage.tsx`, `PullRequestsPage.tsx`. Effort : S.*
 
 ## P3 — Long terme
 
-### 48. Mises à jour temps réel (SSE) — différé
-Reprise de la piste 12 : flux d'événements (`/api/v1/events/stream`) alimenté
-par le worker. Le rafraîchissement automatique (P1.5) couvre encore le besoin.
+### 17. Mises à jour temps réel (SSE)
+Flux `/api/v1/events/stream` alimenté par le worker ; le rafraîchissement
+automatique couvre le besoin à ce jour. *Effort : L.*
+
+### 18. Notifications
+Prévenir sur fusion réussie, PR bloquée, échec du worker, quota GitHub bas ou
+arrêt d'urgence engagé (webhook sortant, Slack, e-mail), désabonnement par
+canal. *Fichiers : `worker.py`, `analysis_service.py`, config. Effort : M.*
+
+### 19. Analytics produit à partir des snapshots
+Dépasser les sparklines : temps de fusion médian, taux d'échec des checks,
+MTTR, page « tendances ». *Fichiers : `snapshot_service.py`, frontend. Effort : M.*
+
+### 20. PostgreSQL pour la production
+SQLite convient au mono-poste ; si multi-utilisateurs (piste 1) ou forte
+activité worker, activer le profil `postgres` existant et documenter la
+migration Alembic. *Fichiers : `docker-compose.yml`, doc. Effort : M.*
+
+### 21. Multi-utilisateurs / vues sauvegardées
+Dépend de la piste 1 : espaces d'équipe, vues de filtres enregistrées
+réutilisant les filtres d'URL. *Effort : L.*
+
+### 22. Tracing distribué (OpenTelemetry)
+`X-Request-ID` assure la corrélation des logs ; étendre au tracing (span par
+requête, appel provider, passe worker) si le besoin d'observabilité augmente.
 *Effort : L.*
 
-### 49. Virtualisation des longues listes — à évaluer
-Reprise de la piste 13 : `@tanstack/react-virtual` si les volumes grandissent.
-*Effort : S.*
+## Réalisé depuis la précédente analyse (ne pas retravailler)
 
-### 50. Analytics produit à partir des snapshots
-Les snapshots ne stockent que des compteurs. Calculer des indicateurs de
-tendance (temps de fusion médian, taux d'échec des checks, MTTR) pour nourrir
-une page « tendances » au-delà des sparklines actuelles.
-*Fichiers : `services/snapshot_service.py`, `frontend`. Effort : M.*
-
-### 51. Notifications
-Prévenir sur fusion réussie, PR bloquée, échec du worker ou arrêt d'urgence
-engagé (webhook sortant, e-mail ou Slack), avec désabonnement par canal.
-*Fichiers : `worker.py`, `services/analysis_service.py`, config. Effort : M.*
-
-### 52. Multi-utilisateurs / vues sauvegardées
-Dépend de la piste 29 : comptes, espaces d'équipe et vues de filtres
-enregistrées, réutilisant les filtres persistés dans l'URL.
-*Effort : L.*
-
-### 53. Tracing distribué (OpenTelemetry)
-Le `X-Request-ID` assure déjà la corrélation des logs. Étendre au tracing
-(span par requête, appel provider, passe worker) si le besoin d'observabilité
-augmente.
-*Fichiers : `core/request_context.py`, intégrations. Effort : L.*
-
-### 54. Partitionnement des snapshots
-Si `daily_snapshots` devient volumineuse, partitionner par mois ou basculer
-sur `pg_partman`, en complément de la rétention (piste 40).
-*Effort : M.*
-
-## Déjà couvert (ne pas retravailler)
-- ETag, `Retry-After`, single-flight, cache mémoire/Redis, rate limiting
-  mémoire/Redis, `X-Request-ID`, métriques HTTP, en-têtes de sécurité.
-- i18n fr/en backend (y compris messages d'audit reconstruits à l'affichage)
-  et frontend, thème clair, recherche serveur, pagination PR/issues/audit.
-- GraphQL opt-in, token GitHub App, historique `daily_snapshots` et sparklines,
-  code splitting, `ErrorBoundary`, tests E2E et tests du worker.
+- **Sécurité/ops** : jeton porteur `REPOFLOW_API_TOKEN` + middleware, sondes
+  `/api/health/live` et `/api/health/ready` (503 si non-prêt), healthchecks
+  compose `depends_on: service_healthy` (y compris correctif IPv4 `127.0.0.1`).
+- **Observabilité** : métriques métier (`repoflow_merges_total`,
+  `worker_runs_total`, `provider_requests_total`, `cache_events_total`),
+  histogrammes de latence p95/p99.
+- **Données** : export audit CSV/JSON, persistance SQLite dans `./data`
+  (bind mount, propriété uid 1001), passthrough compose complet des variables
+  GitHub (GraphQL, App, timeouts, cache).
+- **Collecte** : fan-out parallèle borné (`REPOFLOW_GITHUB_MAX_CONCURRENCY`)
+  avec budget par dépôt (`_COLLECTION_TIMEOUT`), isolation des erreurs réseau,
+  propagation des erreurs applicatives ; requête GraphQL alignée sur le
+  schéma actuel de GitHub ; **exclusion des dépôts archivés** (référentiel,
+  PR, issues, compteurs).
+- **Interface** : activités récentes cliquables vers les PR, compteurs
+  dépôts → PR/issues du dépôt, lien « Voir sur GitHub » (nouvel onglet) sur le
+  détail PR, corps Markdown GFM + HTML sanitisé (`rehype-raw` +
+  `rehype-sanitize`) pour PR, revues et issues.
+- **Qualité** : tests d'accessibilité axe-core, hygiène dépôt (LICENSE,
+  CHANGELOG, `.editorconfig`, pre-commit), seuils CI cohérents, correctif
+  timezone des tests de snapshots, E2E en CI.
 
 ## Dettes connues et limites documentées
-- Rate limiting à fenêtre fixe (Redis dépendance optionnelle).
-- GraphQL opt-in : détail PR et fusion restent en REST.
-- Worker désactivé par défaut ; aucun seed de snapshots en mode demo.
-- Pas d'authentification (piste 29, la plus structurante).
+
+- Rate limiting à fenêtre fixe, désactivé par défaut (piste 3).
+- GraphQL opt-in : issues et détail PR restent en REST (piste 11).
+- Worker désactivé par défaut ; pas de seed de snapshots en mode démo.
+- Fusion automatique désactivée par défaut (garde-fou volontaire).
+- Le HTML non autorisé par la liste blanche est supprimé silencieusement
+  (comportement identique à GitHub).
