@@ -1,4 +1,4 @@
-import { CircleAlert, Gauge, Menu, ShieldCheck, ShieldX } from 'lucide-react'
+import { CircleAlert, Gauge, LogOut, Menu, ShieldCheck, ShieldX } from 'lucide-react'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
@@ -11,6 +11,7 @@ import { PageLoader } from '@/components/PageLoader'
 import { Sidebar } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAsync } from '@/hooks/useAsync'
+import { useAuth } from '@/hooks/useAuth'
 import { getHealth } from '@/services/apiClient'
 
 const GITHUB_QUOTA_LOW_THRESHOLD = 100
@@ -20,6 +21,7 @@ export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const mainRef = useRef<HTMLElement>(null)
+  const { token, logout } = useAuth()
 
   useEffect(() => {
     mainRef.current?.focus()
@@ -95,6 +97,19 @@ export function AppLayout() {
                 <Gauge className="size-3.5" aria-hidden />
                 {t('app.githubQuota', { remaining: health.github_rate_limit.remaining })}
               </Badge>
+            ) : null}
+            {token ? (
+              <button
+                type="button"
+                aria-label={t('auth.logout')}
+                onClick={() => {
+                  logout()
+                  window.location.reload()
+                }}
+                className="rounded-md border border-slate-700 bg-slate-900 p-1.5 text-slate-300 transition hover:border-red-600 hover:text-red-300"
+              >
+                <LogOut className="size-4" aria-hidden />
+              </button>
             ) : null}
             <ThemeToggle />
             <LanguageSwitcher />

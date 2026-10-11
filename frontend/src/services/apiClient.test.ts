@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TFunction } from 'i18next'
 
+import { getUnauthorized, resetAuth, setToken } from '@/lib/auth'
 import {
   ApiError,
   apiErrorMessage,
   createRepositoryConfig,
   deleteRepositoryConfig,
+  exportAudit,
   getAudit,
   getHealth,
   getIssues,
@@ -30,11 +32,13 @@ const healthPayload = {
 describe('apiClient', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
+    resetAuth()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    resetAuth()
   })
 
   it('retourne les données en cas de succès', async () => {
@@ -279,5 +283,81 @@ describe('apiClient', () => {
       '/api/v1/audit?event_type=merge_succeeded&repository=acme%2Fweb-app',
       expect.anything(),
     )
+  })
+
+  it('ajoute le jeton porteur quand il est présent', async () => {
+    setToken('jeton-test')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(healthPayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getHealth()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/health',
+      expect.objectContaining({
+        headers: { Accept: 'application/json', Authorization: 'Bearer jeton-test' },
+      }),
+    )
+  })
+
+  it('signale un accès non autorisé sur 401', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'Refusé.' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiError)
+    expect(getUnauthorized()).toBe(true)
+  })
+
+  it('exporte le journal avec l’en-tête d’autorisation', async () => {
+    setToken('jeton-test')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response('id,message\n1,ok', {
+        status: 200,
+        headers: {
+          'Content-Disposition': 'attachment; filename="repoflow-audit-20260101.csv"',
+        },
+      }),
+    )
+
+    const result = await exportAudit({ event_type: 'analysis', format: 'csv' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/audit/export?event_type=analysis&format=csv',
+      expect.objectContaining({ headers: { Authorization: 'Bearer jeton-test' } }),
+    )
+    expect(result.filename).toBe('repoflow-audit-20260101.csv')
+    expect(result.content).toContain('id,message')
+  })
+
+  it('exporte en JSON avec un nom par défaut', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('[]', { status: 200 }))
+
+    const result = await exportAudit({ format: 'json' })
+    expect(result.filename).toBe('repoflow-audit.json')
+  })
+
+  it('signale une erreur HTTP à l’export', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
+
+    await expect(exportAudit()).rejects.toMatchObject({ code: 'http_error', status: 500 })
+  })
+
+  it('marque non autorisé si l’export renvoie 401', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('', { status: 401 }))
+
+    await expect(exportAudit()).rejects.toBeInstanceOf(ApiError)
+    expect(getUnauthorized()).toBe(true)
   })
 })

@@ -60,6 +60,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "fr": "La requête est invalide.",
         "en": "The request is invalid.",
     },
+    "unauthorized": {
+        "fr": "Authentification requise : jeton d'accès invalide ou manquant.",
+        "en": "Authentication required: missing or invalid access token.",
+    },
     "internal_error": {
         "fr": "Une erreur interne est survenue.",
         "en": "An internal error occurred.",

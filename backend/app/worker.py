@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.metrics import record_worker_run
 from app.db.init_db import create_all
 from app.db.session import get_session_factory
 from app.integrations.github.factory import get_provider
@@ -45,6 +46,11 @@ async def run_once() -> None:
         )
         _purge_audit(session, settings.audit_retention_days)
         await _record_snapshot(session, provider)
+    except Exception:
+        record_worker_run("error")
+        raise
+    else:
+        record_worker_run("success")
     finally:
         session.close()
 

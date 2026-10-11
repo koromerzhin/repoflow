@@ -8,8 +8,9 @@ import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useResource } from '@/hooks/useAsync'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { downloadTextFile } from '@/lib/download'
 import { auditEventClass, auditEventLabel, formatDateTime } from '@/lib/status'
-import { getAudit } from '@/services/apiClient'
+import { exportAudit, getAudit } from '@/services/apiClient'
 import type { AuditEvent } from '@/types/api'
 
 const eventTypeOptions: { value: string; labelKey: string }[] = [
@@ -41,6 +42,25 @@ export function HistoryPage() {
   useDocumentTitle(t('history.title'))
   const [eventType, setEventType] = useState('')
   const [repository, setRepository] = useState('')
+  const [exporting, setExporting] = useState<'csv' | 'json' | null>(null)
+  const [exportError, setExportError] = useState(false)
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(format)
+    setExportError(false)
+    try {
+      const { content, filename } = await exportAudit({
+        event_type: eventType || undefined,
+        repository: repository || undefined,
+        format,
+      })
+      downloadTextFile(filename, content, format === 'json' ? 'application/json' : 'text/csv')
+    } catch {
+      setExportError(true)
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const audit = useResource(
     (options, signal) =>
@@ -65,6 +85,22 @@ export function HistoryPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton onClick={audit.refresh} loading={audit.loading} />
+            <button
+              type="button"
+              onClick={() => handleExport('csv')}
+              disabled={exporting !== null}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-60"
+            >
+              {exporting === 'csv' ? t('common.loading') : t('history.exportCsv')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('json')}
+              disabled={exporting !== null}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-60"
+            >
+              {exporting === 'json' ? t('common.loading') : t('history.exportJson')}
+            </button>
             <label className="flex items-center gap-2 text-sm text-slate-400">
               <span className="hidden sm:inline">{t('history.filterType')}</span>
               <select
@@ -96,6 +132,12 @@ export function HistoryPage() {
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+
+      {exportError ? (
+        <p role="alert" className="mb-4 text-sm text-red-300">
+          {t('history.exportError')}
+        </p>
+      ) : null}
 
       <AsyncState
         loading={audit.loading}

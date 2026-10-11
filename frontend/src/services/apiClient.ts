@@ -20,6 +20,8 @@ import type {
 } from '@/types/api'
 import type { TFunction } from 'i18next'
 
+import { getToken, markUnauthorized } from '@/lib/auth'
+
 /**
  * Erreur normalisée renvoyée par le client HTTP.
  * Aucun secret ne doit jamais transiter par le frontend.
@@ -67,9 +69,14 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, signal } = options
-  const headers: Record<string, string> = { Accept: 'application/json' }
+  const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
   const init: RequestInit = { method, headers, signal }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -88,6 +95,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      markUnauthorized()
+    }
     let errorBody: unknown = null
     try {
       errorBody = await response.json()
@@ -261,6 +271,41 @@ export function updateRule(id: number, payload: AutomationRuleUpdate): Promise<A
 
 export function deleteRule(id: number): Promise<void> {
   return request<void>(`/v1/configs/rules/${id}`, { method: 'DELETE' })
+}
+
+export interface AuditExport {
+  content: string
+  filename: string
+}
+
+export async function exportAudit(
+  params: { event_type?: string; repository?: string; format?: 'csv' | 'json' } = {},
+): Promise<AuditExport> {
+  const format = params.format ?? 'csv'
+  const query = buildQuery({
+    event_type: params.event_type,
+    repository: params.repository,
+    format,
+  })
+  const response = await fetch(`${API_BASE_URL}/v1/audit/export${query}`, {
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 401) {
+    markUnauthorized()
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      `La requête a échoué (statut ${response.status}).`,
+      response.status,
+      'http_error',
+    )
+  }
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const match = /filename="?([^"]+)"?/.exec(disposition)
+  return {
+    content: await response.text(),
+    filename: match?.[1] ?? `repoflow-audit.${format}`,
+  }
 }
 
 export function getAutomationStatus(signal?: AbortSignal): Promise<AutomationStatus> {

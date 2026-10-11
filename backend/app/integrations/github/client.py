@@ -24,6 +24,7 @@ import httpx
 
 from app.core.errors import NotFoundError, ProviderError
 from app.core.logging import get_logger
+from app.core.metrics import record_provider_request
 from app.integrations.github import ratelimit
 from app.integrations.github.errors import (
     GitHubAuthError,
@@ -194,6 +195,7 @@ class GitHubClient:
         params: dict[str, Any] | None = None,
         json: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
+        transport: str = "rest",
     ) -> httpx.Response:
         """Envoie la requête et réessaie une fois une limite secondaire.
 
@@ -206,6 +208,7 @@ class GitHubClient:
         if self._token_provider is not None:
             token = await self._token_provider()
             request_headers["Authorization"] = f"Bearer {token}"
+        record_provider_request(transport)
         response = await self._client.request(
             method, path, params=params, json=json, headers=request_headers
         )
@@ -248,7 +251,10 @@ class GitHubClient:
         comme un succès.
         """
         response = await self._send_with_retry(
-            "POST", "/graphql", json={"query": query, "variables": variables or {}}
+            "POST",
+            "/graphql",
+            json={"query": query, "variables": variables or {}},
+            transport="graphql",
         )
         self._raise_for_status(response)
         payload = response.json()

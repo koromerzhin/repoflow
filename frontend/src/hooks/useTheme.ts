@@ -5,7 +5,14 @@ export type Theme = 'dark' | 'light'
 const STORAGE_KEY = 'repoflow-theme'
 
 function readInitialTheme(): Theme {
-  return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'dark'
+  const stored = localStorage.getItem(STORAGE_KEY)
+  if (stored === 'light' || stored === 'dark') {
+    return stored
+  }
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+  }
+  return 'dark'
 }
 
 export function useTheme() {

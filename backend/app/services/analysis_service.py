@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.core.metrics import record_merge
 from app.integrations.github.provider import Provider
 from app.integrations.github.types import PullRequestDetailRecord
 from app.models.entities import AutomationRule, RepositoryConfig
@@ -176,6 +177,7 @@ async def _analyze_repository(
         )
         if result.merged:
             summary.merged += 1
+            record_merge("succeeded")
             audit_service.record(
                 session,
                 event_type="merge_succeeded",
@@ -187,6 +189,7 @@ async def _analyze_repository(
         else:
             summary.errors += 1
             summary.details.append(f"{config.full_name}#{pr.number}: {result.message}")
+            record_merge("failed")
             audit_service.record(
                 session,
                 event_type="merge_failed",

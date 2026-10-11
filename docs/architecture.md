@@ -25,7 +25,7 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 | Répertoire | Responsabilité |
 | --- | --- |
 | `app/api/` | Routes HTTP et dépendances FastAPI. Aucune logique métier. |
-| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`, `configs`, `automation`, `audit`) et `health`. |
+| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`, `configs`, `automation`, `audit`) et `health`/`health/live`/`health/ready`. |
 | `app/core/` | Configuration, logging, gestion des erreurs, cache TTL mémoire. |
 | `app/db/` | Moteur, sessions et initialisation de la base. |
 | `app/models/` | Modèles ORM SQLAlchemy 2.x. |
@@ -143,14 +143,15 @@ Les middlewares FastAPI sont empilés (du plus interne au plus externe) :
 2. **En-têtes de sécurité** (`app/core/security.py`) — `X-Content-Type-Options`,
    `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, CSP
    sur les chemins `/api`, HSTS en contexte HTTPS uniquement.
-3. **Métriques** (`app/core/metrics.py`) — registre autonome, exposition
+3. **Authentification** (`app/core/security.py`) — jeton porteur optionnel (`Authorization: Bearer`) activé si `REPOFLOW_API_TOKEN` est défini ; rejet 401 sur `/api/v1/*` avec `WWW-Authenticate: Bearer`.
+4. **Métriques** (`app/core/metrics.py`) — registre autonome, exposition
    Prometheus sur `GET /api/metrics` (libellés par méthode, route et statut ;
    les segments dynamiques sont normalisés via le modèle de route).
-4. **Contexte de requête** (`app/core/request_context.py`) — identifiant de
+5. **Contexte de requête** (`app/core/request_context.py`) — identifiant de
    corrélation `X-Request-ID` (repris du client ou généré, sanitizé), propagé
    dans les journaux par `RequestIdFilter`, renvoyé au client ; journal
    d'accès structuré (`méthode chemin → statut (durée)`).
-5. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
+6. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
    aussi les en-têtes CORS.
 
 La limitation de débit est en mémoire par défaut (par processus) ; le backend

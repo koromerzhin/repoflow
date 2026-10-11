@@ -108,7 +108,7 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 
 ### À venir
 
-- Exécution du worker en service séparé dédié (image partagée).
+- Exécution du worker en service séparé dédié.
 
 ## Technologies
 

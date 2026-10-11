@@ -29,6 +29,7 @@ from typing import Any, Protocol, TypeVar
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.core.metrics import record_cache_event
 
 logger = get_logger(__name__)
 
@@ -90,7 +91,9 @@ async def get_or_load(
         if not refresh:
             cached = await _read(key, codec)
             if cached is not _MISS:
+                record_cache_event("hit")
                 return cached  # type: ignore[no-any-return]
+            record_cache_event("miss")
 
         value = await factory()
         await _write(key, value, ttl_seconds, codec)
@@ -125,6 +128,7 @@ def _redis_ready() -> bool:
 def _mark_unavailable(cause: Exception) -> None:
     global _unavailable_until
     _unavailable_until = time.monotonic() + _retry_delay_seconds
+    record_cache_event("fallback")
     logger.warning(
         "Cache Redis indisponible (%s) ; repli sur le cache mémoire.",
         type(cause).__name__,

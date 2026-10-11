@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 
+import { AuthGate } from '@/components/AuthGate'
 import { PageLoader } from '@/components/PageLoader'
 import { AppLayout } from '@/layouts/AppLayout'
 
@@ -40,18 +41,20 @@ const NotFoundPage = lazy(() =>
 export function App() {
   return (
     <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route path="repositories" element={<RepositoriesPage />} />
-          <Route path="pull-requests" element={<PullRequestsPage />} />
-          <Route path="pull-requests/:number" element={<PullRequestDetailPage />} />
-          <Route path="issues" element={<IssuesPage />} />
-          <Route path="automations" element={<AutomationsPage />} />
-          <Route path="history" element={<HistoryPage />} />
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-      </Routes>
+      <AuthGate>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route index element={<DashboardPage />} />
+            <Route path="repositories" element={<RepositoriesPage />} />
+            <Route path="pull-requests" element={<PullRequestsPage />} />
+            <Route path="pull-requests/:number" element={<PullRequestDetailPage />} />
+            <Route path="issues" element={<IssuesPage />} />
+            <Route path="automations" element={<AutomationsPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
+      </AuthGate>
     </Suspense>
   )
 }

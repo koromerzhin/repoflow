@@ -34,6 +34,13 @@ export const en = {
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
   },
+  auth: {
+    title: 'Authentication required',
+    description: 'Enter the access token for this RepoFlow instance.',
+    tokenLabel: 'Access token',
+    submit: 'Sign in',
+    logout: 'Sign out',
+  },
   async: {
     errorTitle: 'Loading error',
     empty: 'Nothing to display.',
@@ -262,6 +269,9 @@ export const en = {
     announcement: '{{total}} event(s) logged.',
     blockers: 'Blockers: {{list}}',
     commit: 'Commit: {{sha}}',
+    exportCsv: 'Export CSV',
+    exportJson: 'Export JSON',
+    exportError: 'The export failed. Please try again.',
   },
   notFound: {
     title: 'Page not found',

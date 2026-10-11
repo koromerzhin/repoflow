@@ -9,6 +9,20 @@
       content="RepoFlow — supervisez plusieurs dépôts GitHub, leurs pull requests et leurs checks CI."
     />
     <title>RepoFlow</title>
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('repoflow-theme')
+          var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
+          var theme = stored === 'light' || stored === 'dark' ? stored : prefersLight ? 'light' : 'dark'
+          if (theme === 'light') {
+            document.documentElement.classList.add('theme-light')
+          }
+        } catch (error) {
+          // Préférences indisponibles : le thème sombre reste appliqué.
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -9,14 +9,16 @@ en cas de panne.
 
 from __future__ import annotations
 
+import hmac
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi.responses import JSONResponse
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import Headers, MutableHeaders
 
 from app.core.cache import get_redis_client
+from app.core.i18n import pick_locale, render_message
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -67,6 +69,65 @@ class SecurityHeadersMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
+
+
+class AuthMiddleware:
+    """Middleware ASGI : exige un jeton porteur sur les routes protégées.
+
+    Désactivé tant qu'aucun jeton n'est configuré. La comparaison se fait en
+    temps constant. Les sondes de santé et l'exposition des métriques restent
+    hors périmètre afin de ne pas gêner les orchestrateurs.
+    """
+
+    def __init__(
+        self,
+        app,
+        *,
+        token: str,
+        protected_prefixes: tuple[str, ...] = ("/api/v1",),
+    ) -> None:
+        self.app = app
+        self._token = token
+        self._prefixes = protected_prefixes
+
+    def _is_protected(self, path: str) -> bool:
+        return any(path == prefix or path.startswith(f"{prefix}/") for prefix in self._prefixes)
+
+    @staticmethod
+    def _header_token(headers: Headers) -> str | None:
+        authorization = headers.get("authorization", "")
+        scheme, _, credentials = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not credentials:
+            return None
+        return credentials.strip()
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http" or not self._is_protected(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+
+        provided = self._header_token(Headers(scope=scope))
+        if provided is not None and hmac.compare_digest(provided, self._token):
+            await self.app(scope, receive, send)
+            return
+
+        locale = pick_locale(Headers(scope=scope).get("accept-language", ""))
+        response = JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "unauthorized",
+                    "message": render_message(
+                        "unauthorized",
+                        locale,
+                        None,
+                        "Authentification requise : jeton d'accès invalide ou manquant.",
+                    ),
+                }
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        await response(scope, receive, send)
 
 
 class RateLimiter:

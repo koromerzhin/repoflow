@@ -42,6 +42,12 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health/live || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   # Base de données PostgreSQL optionnelle (profil "postgres").
   # Activer uniquement avec --profile postgres ; le backend reste sur SQLite
@@ -88,8 +94,15 @@ services:
     ports:
       - "5173:5173"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:5173 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
 volumes:
   repoflow-data:

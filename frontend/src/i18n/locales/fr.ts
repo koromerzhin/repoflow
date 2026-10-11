@@ -34,6 +34,13 @@ export const fr = {
     openMenu: 'Ouvrir le menu',
     closeMenu: 'Fermer le menu',
   },
+  auth: {
+    title: 'Authentification requise',
+    description: "Saisissez le jeton d'accès de l'instance RepoFlow.",
+    tokenLabel: "Jeton d'accès",
+    submit: 'Se connecter',
+    logout: 'Se déconnecter',
+  },
   async: {
     errorTitle: 'Erreur de chargement',
     empty: 'Aucune donnée à afficher.',
@@ -264,6 +271,9 @@ export const fr = {
     announcement: '{{total}} événement(s) journalisé(s).',
     blockers: 'Blocages : {{list}}',
     commit: 'Commit : {{sha}}',
+    exportCsv: 'Exporter CSV',
+    exportJson: 'Exporter JSON',
+    exportError: "L'export a échoué. Réessayez.",
   },
   notFound: {
     title: 'Page introuvable',

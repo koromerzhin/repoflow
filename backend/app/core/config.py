@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     # Exposition des métriques (``/api/metrics``).
     metrics_enabled: bool = True
 
+    # Authentification : jeton porteur partagé (vide = authentification
+    # désactivée, adapté au développement et au mode démonstration). Lorsqu'il
+    # est défini, les routes de l'API v1 exigent ``Authorization: Bearer``.
+    api_token: SecretStr | None = None
+    # Préfixes d'URL protégés par le jeton (sondes et métriques restent
+    # accessibles aux orchestrateurs sans authentification).
+    auth_protected_prefixes: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["/api/v1"]
+    )
+
     # Durcissement sécurité.
     security_headers_enabled: bool = True
     # En-tête HSTS : à activer uniquement en HTTPS (désactivé en développement).
@@ -109,9 +119,9 @@ class Settings(BaseSettings):
     # repli automatique sur mémoire en cas de panne).
     rate_limit_backend: Literal["memory", "redis"] = "memory"
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "auth_protected_prefixes", mode="before")
     @classmethod
-    def _split_origins(cls, value: object) -> object:
+    def _split_list(cls, value: object) -> object:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
@@ -119,6 +129,12 @@ class Settings(BaseSettings):
     @property
     def is_demo(self) -> bool:
         return self.github_provider == "demo"
+
+    @property
+    def auth_enabled(self) -> bool:
+        """Vrai lorsqu'un jeton d'accès est configuré."""
+        token = self.api_token
+        return bool(token is not None and token.get_secret_value())
 
 
 @lru_cache

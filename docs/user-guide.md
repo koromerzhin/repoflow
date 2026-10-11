@@ -51,7 +51,7 @@ Liste des issues (hors pull requests), filtrable par dépôt et par état.
 
 ### Historique
 Journal d'audit persistant : analyses du worker, décisions, fusions réussies
-ou bloquées. Filtrable par type d'événement et par dépôt.
+ou bloquées. Filtrable par type d'événement et par dépôt. Export CSV ou JSON disponible.
 
 ## Questions fréquentes
 

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import csv
+import io
+import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
@@ -231,3 +234,58 @@ def test_purge_desactivee(session: Session) -> None:
 
     assert audit_service.purge_expired(session, retention_days=0) == 0
     assert audit_service.count_events(session) == 1
+
+
+def test_export_csv(client: TestClient, session: Session) -> None:
+    _seed(session)
+
+    response = client.get("/api/v1/audit/export", params={"format": "csv"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    assert ".csv" in response.headers["content-disposition"]
+
+    rows = list(csv.reader(io.StringIO(response.text)))
+    assert rows[0] == [
+        "id",
+        "occurred_at",
+        "event_type",
+        "repository_full_name",
+        "pull_request_number",
+        "actor",
+        "message",
+    ]
+    assert len(rows) == 3
+    assert rows[1][2] == "merge_blocked"
+    assert rows[1][3] == "acme/api-gateway"
+
+
+def test_export_json(client: TestClient, session: Session) -> None:
+    _seed(session)
+
+    response = client.get("/api/v1/audit/export", params={"format": "json"})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert ".json" in response.headers["content-disposition"]
+
+    payload = json.loads(response.text)
+    assert len(payload) == 2
+    assert payload[0]["event_type"] == "merge_blocked"
+    assert payload[0]["message"]
+
+
+def test_export_filtre_et_localise(client: TestClient, session: Session) -> None:
+    _seed(session)
+
+    response = client.get(
+        "/api/v1/audit/export",
+        params={"format": "json", "event_type": "merge_succeeded"},
+        headers={"Accept-Language": "en"},
+    )
+    payload = json.loads(response.text)
+    assert len(payload) == 1
+    assert payload[0]["message"] == "PR #142 merged (squash)."
+
+
+def test_export_format_invalide(client: TestClient) -> None:
+    assert client.get("/api/v1/audit/export", params={"format": "xml"}).status_code == 422

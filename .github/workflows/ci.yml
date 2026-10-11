@@ -61,7 +61,7 @@ jobs:
         run: npm run typecheck
       - name: Tests Vitest
         run: npm test
-      - name: Tests Vitest (couverture, seuil 85 %)
+      - name: Tests Vitest (couverture, seuils lignes 80 % / branches 65 %)
         run: npm run test:coverage
       - name: Build de production
         run: npm run build
