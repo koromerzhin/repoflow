@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # 0 désactive le cache. Le cache est invalidé par ``?refresh=true``.
     cache_ttl_seconds: int = Field(default=30, ge=0)
 
+    # Backend de cache : ``memory`` (par instance) ou ``redis`` (partagé).
+    # Une panne Redis replie automatiquement sur le cache mémoire.
+    cache_backend: Literal["memory", "redis"] = "memory"
+    cache_redis_url: str = "redis://localhost:6379/0"
+
     # Intégration GitHub.
     # ``demo`` n'exige aucun token : des données fictives sont servies.
     # ``github`` nécessite un token et interroge l'API GitHub réelle.

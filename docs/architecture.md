@@ -39,8 +39,10 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 1. La route appelle un **service** via une dépendance FastAPI.
 2. Le service interroge le **fournisseur** (`Provider`) pour obtenir des
    enregistrements de domaine (`RepositoryRecord`, `PullRequestRecord`,
-   `IssueRecord`), les résultats étant mis en cache mémoire avec un TTL
-   configurable (`REPOFLOW_CACHE_TTL_SECONDS`, contournable via `?refresh=true`).
+   `IssueRecord`), les résultats étant mis en cache avec un TTL
+   configurable (`REPOFLOW_CACHE_TTL_SECONDS`, contournable via `?refresh=true`),
+   sur le backend `memory` (défaut) ou `redis` (partagé entre instances,
+   `REPOFLOW_CACHE_BACKEND`) avec repli mémoire en cas de panne.
 3. Le service applique les **règles métier** (`merge_rules`) et convertit les
    enregistrements en **schémas d'API**.
 4. La route sérialise la réponse.

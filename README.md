@@ -48,7 +48,10 @@ Pour brancher des vraies données GitHub, éditer `.env` :
   requests sont exclues de cette liste.
 - Détail d'une pull request `GET /api/v1/pull-requests/{number}` : fichiers
   modifiés, revues et timeline, avec page frontend dédiée.
-- Cache TTL mémoire des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`)
+- Cache TTL des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`),
+  backend **mémoire** (défaut) ou **Redis partagé** entre instances
+  (`REPOFLOW_CACHE_BACKEND=redis`, `REPOFLOW_CACHE_REDIS_URL`) avec repli
+  automatique sur mémoire en cas de panne.
   et rafraîchissement manuel via `?refresh=true` ou les boutons « Rafraîchir ».
 - Configuration des dépôts suivis et des règles d'automatisation
   (`/api/v1/configs/*`) : CRUD complet, validation stricte côté serveur.

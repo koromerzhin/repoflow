@@ -82,11 +82,16 @@ Tailwind ; le sélecteur rejoint le switcher de langue dans l'en-tête.
 *Effort : M.* ✅ Implémenté : inversion de palette via variables CSS
 (`html.theme-light`), bascule persistée dans l’en-tête.
 
-### 11. Cache distribué (optionnel) — différé
+### 11. ✅ Cache distribué (optionnel)
 Le cache TTL est en mémoire (`app/core/cache.py`) : inopérant en
 multi-instances. Si le déploiement scale, abstraire derrière l'interface
 actuelle et brancher Redis (`REPOFLOW_CACHE_BACKEND=memory|redis`).
-*Effort : M.* **Différé** : déploiement mono-instance à ce jour. ✅ Implémenté : libellés/assignés/jalons exposés par l’API,
+*Effort : M.* ✅ Implémenté : backend Redis derrière la même interface
+(`app/core/cache.py`), codecs Pydantic explicites par site de cache,
+**repli automatique sur mémoire en cas de panne** avec nouvelle tentative
+périodique, `REPOFLOW_CACHE_BACKEND`/`REPOFLOW_CACHE_REDIS_URL`, service
+`redis` sous profil Docker, tests FakeRedis + intégration réelle (skipif).
+Dépendance `redis>=5` en core. ✅ Implémenté : libellés/assignés/jalons exposés par l’API,
 filtres dédiés dans la barre et affichage sur les cartes.
 
 ## P3 — Long terme (à garder en tête)

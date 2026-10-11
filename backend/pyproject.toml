@@ -19,6 +19,7 @@ dependencies = [
     "alembic>=1.13",
     "httpx>=0.27",
     "pyjwt[crypto]>=2.8",
+    "redis>=5",
 ]
 
 [project.optional-dependencies]

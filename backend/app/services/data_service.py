@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import unicodedata
 
-from app.core.cache import get_or_load
+from pydantic import BaseModel
+
+from app.core.cache import Codec, get_or_load
 from app.core.config import get_settings
 from app.core.i18n import DEFAULT_LOCALE
 from app.integrations.github.provider import Provider, collect
@@ -35,6 +38,54 @@ def provider_info(provider: Provider) -> ProviderInfo:
         is_demo=provider.is_demo,
         requires_token=provider.requires_token,
     )
+
+
+def _model_list_codec(model: type[BaseModel]) -> Codec:
+    """Codec des listes de records Pydantic pour le backend Redis."""
+
+    def encode(value: list[BaseModel]) -> str:
+        return json.dumps([item.model_dump(mode="json") for item in value])
+
+    def decode(raw: str) -> list[BaseModel]:
+        return [model.model_validate(item) for item in json.loads(raw)]
+
+    return encode, decode
+
+
+def _model_codec(model: type[BaseModel]) -> Codec:
+    """Codec d'un record Pydantic unique pour le backend Redis."""
+
+    def encode(value: BaseModel) -> str:
+        return value.model_dump_json()
+
+    def decode(raw: str) -> BaseModel:
+        return model.model_validate_json(raw)
+
+    return encode, decode
+
+
+def _combined_codec() -> Codec:
+    """Codec du tuple ``(dépôts, pull requests)`` pour le backend Redis."""
+    repository_codec = _model_list_codec(RepositoryRecord)
+    pull_request_codec = _model_list_codec(PullRequestRecord)
+
+    def encode(value: tuple[list[RepositoryRecord], list[PullRequestRecord]]) -> str:
+        repositories, pull_requests = value
+        return json.dumps(
+            {
+                "repositories": repository_codec[0](repositories),
+                "pull_requests": pull_request_codec[0](pull_requests),
+            }
+        )
+
+    def decode(raw: str) -> tuple[list[RepositoryRecord], list[PullRequestRecord]]:
+        payload = json.loads(raw)
+        return (
+            repository_codec[1](payload["repositories"]),
+            pull_request_codec[1](payload["pull_requests"]),
+        )
+
+    return encode, decode
 
 
 def repository_to_schema(repository: RepositoryRecord, *, is_demo: bool) -> Repository:
@@ -94,6 +145,7 @@ async def get_repositories(provider: Provider, *, refresh: bool = False) -> list
         get_settings().cache_ttl_seconds,
         provider.list_repositories,
         refresh=refresh,
+        codec=_model_list_codec(RepositoryRecord),
     )
     return [repository_to_schema(repository, is_demo=provider.is_demo) for repository in records]
 
@@ -112,6 +164,7 @@ async def get_pull_requests(
         get_settings().cache_ttl_seconds,
         lambda: provider.list_pull_requests(repository_full_name),
         refresh=refresh,
+        codec=_model_list_codec(PullRequestRecord),
     )
     return [
         pull_request_to_schema(pr, is_demo=provider.is_demo, locale=locale)
@@ -156,6 +209,7 @@ async def get_pull_request(
         get_settings().cache_ttl_seconds,
         lambda: provider.get_pull_request(repository_full_name, number),
         refresh=refresh,
+        codec=_model_codec(PullRequestDetailRecord),
     )
     return pull_request_detail_to_schema(record, is_demo=provider.is_demo, locale=locale)
 
@@ -213,6 +267,7 @@ async def get_issues(
         get_settings().cache_ttl_seconds,
         lambda: provider.list_issues(repository_full_name, state=state),
         refresh=refresh,
+        codec=_model_list_codec(IssueRecord),
     )
     return [
         issue_to_schema(issue, is_demo=provider.is_demo)
@@ -243,4 +298,5 @@ async def get_combined_data(
         get_settings().cache_ttl_seconds,
         lambda: collect(provider),
         refresh=refresh,
+        codec=_combined_codec(),
     )

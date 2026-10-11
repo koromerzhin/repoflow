@@ -13,6 +13,11 @@
 # Avec PostgreSQL (production) :
 #   REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
 #   docker compose --profile postgres up --build
+#
+# Avec un cache Redis partagé (multi-instances) :
+#   REPOFLOW_CACHE_BACKEND=redis
+#   REPOFLOW_CACHE_REDIS_URL=redis://redis:6379/0
+#   docker compose --profile redis up --build
 
 services:
   backend:
@@ -27,6 +32,8 @@ services:
       REPOFLOW_CORS_ORIGINS: ${REPOFLOW_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       REPOFLOW_KILL_SWITCH_ENGAGED: ${REPOFLOW_KILL_SWITCH_ENGAGED:-false}
       REPOFLOW_WORKER_ENABLED: ${REPOFLOW_WORKER_ENABLED:-false}
+      REPOFLOW_CACHE_BACKEND: ${REPOFLOW_CACHE_BACKEND:-memory}
+      REPOFLOW_CACHE_REDIS_URL: ${REPOFLOW_CACHE_REDIS_URL:-redis://redis:6379/0}
     volumes:
       - repoflow-data:/data
     ports:
@@ -51,6 +58,21 @@ services:
       test: ["CMD-SHELL", "pg_isready -U repoflow -d repoflow"]
       interval: 5s
       timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Cache Redis partagé optionnel (profil "redis").
+  # Activer uniquement avec --profile redis ; le backend reste sur le cache
+  # mémoire par défaut et utilise Redis si REPOFLOW_CACHE_BACKEND=redis.
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 10
     restart: unless-stopped
 
