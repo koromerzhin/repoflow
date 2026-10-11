@@ -373,3 +373,30 @@ async def test_quota_non_renseigne_sans_entetes() -> None:
         await client.aclose()
 
     assert snapshot == {"remaining": None, "limit": None, "reset_at": None}
+
+
+async def test_token_provider_autorise_chaque_requete() -> None:
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"ok": True})
+
+    tokens = iter(["ghs_token_1", "ghs_token_2"])
+
+    async def provider() -> str:
+        return next(tokens)
+
+    client = GitHubClient(
+        None,
+        "https://api.github.com",
+        transport=httpx.MockTransport(handler),
+        token_provider=provider,
+    )
+    try:
+        await client.get("/user")
+        await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert captured == ["Bearer ghs_token_1", "Bearer ghs_token_2"]

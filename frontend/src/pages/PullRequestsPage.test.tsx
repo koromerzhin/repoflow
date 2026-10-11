@@ -222,7 +222,7 @@ describe('PullRequestsPage', () => {
     )
   })
 
-  it('filtre les pull requests par recherche texte', async () => {
+  it('filtre les pull requests par recherche texte côté serveur', async () => {
     const user = userEvent.setup()
     vi.mocked(getRepositories).mockResolvedValue(repositories)
     vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
@@ -236,8 +236,10 @@ describe('PullRequestsPage', () => {
     await user.type(screen.getByRole('searchbox'), 'facturation')
 
     await waitFor(() => {
-      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument()
-      expect(screen.queryByText('Mise à jour des dépendances')).not.toBeInTheDocument()
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        { search: 'facturation', refresh: false },
+        expect.anything(),
+      )
     })
   })
 

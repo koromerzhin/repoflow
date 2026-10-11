@@ -26,6 +26,7 @@ export const en = {
     apiDegraded: 'API degraded',
     killSwitchActive: 'Emergency stop active',
     githubQuota: 'GitHub quota: {{remaining}} requests left',
+    toggleTheme: 'Toggle theme',
     demoBanner:
       'Demo mode: all displayed data is fictional and does not come from GitHub.',
     openMenu: 'Open menu',
@@ -169,6 +170,12 @@ export const en = {
     filterRepository: 'Repository',
     allRepositories: 'All repositories',
     filterState: 'State',
+    filterLabel: 'Label',
+    filterAssignee: 'Assignee',
+    filterMilestone: 'Milestone',
+    anyLabel: 'All labels',
+    anyAssignee: 'All assignees',
+    anyMilestone: 'All milestones',
     state: {
       open: 'Open',
       closed: 'Closed',
@@ -176,6 +183,7 @@ export const en = {
     },
     empty: 'No issue to display for this filter.',
     noMatch: 'No issue matches this search.',
+    assignedTo: 'Assigned to',
     announcement: '{{total}} issue(s) displayed.',
     announcementFor: '{{total}} issue(s) displayed for {{repository}}.',
     updatedOn: 'Updated on {{date}}',

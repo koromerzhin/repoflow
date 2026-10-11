@@ -42,14 +42,16 @@ manuel systématique sans consommer le quota (le cache TTL + ETag absorbent).
 
 ## P2 — Moyen terme (structurants)
 
-### 6. Réduire le nombre de requêtes GitHub (GraphQL)
+### 6. ✅ Réduire le nombre de requêtes GitHub (GraphQL)
 Pour chaque PR ouverte : détail + check-runs + status + revues ≈ 4-5 requêtes
 (voir le commentaire dans `github_provider.py:103`). Une seule requête GraphQL
 par dépôt ramènerait tout (PR, checks, reviews, mergeable) : division par ~5 de
-la consommation du quota. C'est la plus grosse optimisation possible.
+la consommation du quota. C'est la plus grosse optimisation possible. ✅ Implémenté : transport
+GraphQL opt-in (`REPOFLOW_GITHUB_USE_GRAPHQL=true`), une requête par page
+avec checks et revues inclus ; le détail et la fusion restent en REST.
 *Effort : M-L.*
 
-### 7. Recherche côté serveur
+### 7. ✅ Recherche côté serveur
 La recherche texte est aujourd'hui client-side (`frontend/src/lib/search.ts`) :
 le serveur renvoie tout, le navigateur filtre. Ajouter un paramètre `search`
 sur `GET /v1/pull-requests` et `/v1/issues` (filtrage dans `data_service`,
@@ -64,46 +66,55 @@ quotidien agrégé par dépôt (compteurs PR/checks/issues) dans une table
 agrégats du dashboard.
 *Effort : M.*
 
-### 9. Tests E2E (Playwright)
+### 9. ✅ Tests E2E (Playwright)
 La CI couvre lint + tests unitaires, aucun parcours de bout en bout. Ajouter
 2-3 parcours critiques contre le fournisseur demo : liste → filtre → détail
 PR, automatisations → engage l'arrêt d'urgence. Le mode demo en fait un
 prérequis trivial.
 *Effort : M.*
 
-### 10. Thème clair
+### 10. ✅ Thème clair
 Interface uniquement sombre. Exploiter `prefers-color-scheme` + variables CSS
 Tailwind ; le sélecteur rejoint le switcher de langue dans l'en-tête.
-*Effort : M.*
+*Effort : M.* ✅ Implémenté : inversion de palette via variables CSS
+(`html.theme-light`), bascule persistée dans l’en-tête.
 
-### 11. Cache distribué (optionnel)
+### 11. Cache distribué (optionnel) — différé
 Le cache TTL est en mémoire (`app/core/cache.py`) : inopérant en
 multi-instances. Si le déploiement scale, abstraire derrière l'interface
 actuelle et brancher Redis (`REPOFLOW_CACHE_BACKEND=memory|redis`).
-*Effort : M.*
+*Effort : M.* **Différé** : déploiement mono-instance à ce jour. ✅ Implémenté : libellés/assignés/jalons exposés par l’API,
+filtres dédiés dans la barre et affichage sur les cartes.
 
 ## P3 — Long terme (à garder en tête)
 
-### 12. Mises à jour temps réel
+### 12. Mises à jour temps réel — différé
 Remplacer le rafraîchissement manuel par SSE (`/api/v1/events/stream`) côté
 worker : pousser les événements d'audit nouveaux. Le fallback REST reste tel
 quel.
-*Effort : L.*
+*Effort : L.* **Différé** : le rafraîchissement automatique (P1.5) couvre le
+besoin actuel.
 
-### 13. Virtualisation des longues listes
+### 13. Virtualisation des longues listes — non nécessaire aujourd'hui
+Les listes PR/issues rendent tous les éléments. Si les volumes grandissent,
+`@tanstack/react-virtual` sur les conteneurs de cartes.
+*Effort : S.* **À évaluer** : volumes actuels faibles, recherche serveur en
+place.
 Les listes PR/issues rendent tous les éléments. Si les volumes grandissent,
 `@tanstack/react-virtual` sur les conteneurs de cartes.
 *Effort : S (une fois le besoin confirmé).*
 
-### 14. Filtres issues avancés
+### 14. ✅ Filtres issues avancés
 Ajouter libellés, assignés et jalons (`GET /repos/{o}/{r}/issues` les expose
 déjà) : colonnes `labels`/`assignees` dans le mapping, filtres dans l'UI.
 *Effort : M.*
 
-### 15. Token GitHub App
-Déjà listé « à venir » dans le README : échange clé privée → jeton
-d'installation, qui lèverait aussi la limite de requêtes (5 000/h → 15 000/h
-pour les installations).
+### 15. ✅ Token GitHub App
+Échange clé privée → JWT → jeton d'installation implémenté
+(`app/integrations/github/app_auth.py`) : cache + renouvellement
+automatique, prioritaire sur le token personnel, quota 15 000 req/h.
+Reste éventuellement : lister les installations dynamiquement
+(`/installation/repositories`) au lieu d'un identifiant fixe.
 
 ## Déjà couvert (ne pas retravailler)
 - Requêtes conditionnelles ETag, Retry-After, single-flight (2026-10).

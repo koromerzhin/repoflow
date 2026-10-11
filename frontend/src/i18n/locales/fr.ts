@@ -26,6 +26,7 @@ export const fr = {
     apiDegraded: 'API dégradée',
     killSwitchActive: 'Arrêt d\'urgence actif',
     githubQuota: 'Quota GitHub : {{remaining}} requêtes restantes',
+    toggleTheme: 'Changer de thème',
     demoBanner:
       'Mode démonstration : toutes les données affichées sont fictives et ne proviennent pas de GitHub.',
     openMenu: 'Ouvrir le menu',
@@ -171,6 +172,12 @@ export const fr = {
     filterRepository: 'Dépôt',
     allRepositories: 'Tous les dépôts',
     filterState: 'État',
+    filterLabel: 'Libellé',
+    filterAssignee: 'Assigné',
+    filterMilestone: 'Jalon',
+    anyLabel: 'Tous les libellés',
+    anyAssignee: 'Tous les assignés',
+    anyMilestone: 'Tous les jalons',
     state: {
       open: 'Ouvertes',
       closed: 'Fermées',
@@ -178,6 +185,7 @@ export const fr = {
     },
     empty: 'Aucune issue à afficher pour ce filtre.',
     noMatch: 'Aucune issue ne correspond à cette recherche.',
+    assignedTo: 'Assignée à',
     announcement: '{{total}} issue(s) affichée(s).',
     announcementFor: '{{total}} issue(s) affichée(s) pour {{repository}}.',
     updatedOn: 'Mise à jour le {{date}}',

@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     github_per_page: int = Field(default=100, ge=1, le=100)
     github_max_pages: int = Field(default=10, ge=1, le=100)
 
+    # GitHub App (prioritaire sur le token personnel si configurée).
+    # Le jeton d'installation est échangé automatiquement (quota 15 000/h).
+    # La clé privée peut être fournie en PEM (``\n`` échappés acceptés) ou en
+    # base64 dans ``REPOFLOW_GITHUB_APP_PRIVATE_KEY``.
+    github_app_id: str | None = None
+    github_app_private_key: SecretStr | None = None
+    github_app_installation_id: int | None = None
+
+    # Transport GraphQL pour la liste des pull requests (1 requête par page
+    # au lieu de 4-5 par pull request en REST).
+    github_use_graphql: bool = False
+
     # La fusion automatique est désactivée par défaut et ne doit pas être
     # activée tant que les garde-fous serveur ne sont pas en place.
     auto_merge_enabled_globally: bool = False

@@ -15,7 +15,6 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useUrlState } from '@/hooks/useUrlState'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
-import { matchesQuery } from '@/lib/search'
 import { getPullRequests, getRepositories } from '@/services/apiClient'
 
 export function PullRequestsPage() {
@@ -28,26 +27,18 @@ export function PullRequestsPage() {
   const pullRequests = useResource(
     (options, signal) =>
       getPullRequests(
-        { repository: repository || undefined, refresh: options.refresh },
+        {
+          repository: repository || undefined,
+          search: query || undefined,
+          refresh: options.refresh,
+        },
         signal,
       ),
-    [repository],
+    [repository, query],
   )
   useAutoRefresh(pullRequests.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
-  const filteredItems = useMemo(() => {
-    const items = pullRequests.data?.items ?? []
-    if (!query.trim()) {
-      return items
-    }
-    return items.filter((pr) =>
-      matchesQuery(
-        `${pr.title} ${pr.author} ${pr.number} ${pr.repository_full_name} ${pr.source_branch} ${pr.target_branch}`,
-        query,
-      ),
-    )
-  }, [pullRequests.data, query])
-
+  const items = pullRequests.data?.items ?? []
   const searching = query.trim().length > 0
   const visibility = useMemo(
     () =>
@@ -59,7 +50,7 @@ export function PullRequestsPage() {
 
   const announcement = pullRequests.data
     ? t(repository ? 'pr.announcementFor' : 'pr.announcement', {
-        total: searching ? filteredItems.length : pullRequests.data.total,
+        total: pullRequests.data.total,
         repository,
       })
     : ''
@@ -94,12 +85,12 @@ export function PullRequestsPage() {
       <AsyncState
         loading={pullRequests.loading}
         error={pullRequests.error}
-        isEmpty={pullRequests.data !== undefined && filteredItems.length === 0}
+        isEmpty={pullRequests.data !== undefined && items.length === 0}
         emptyMessage={searching ? t('pr.noMatch') : t('pr.empty')}
         onRetry={pullRequests.reload}
       >
         <div className="space-y-4">
-          {filteredItems.map((pr) => (
+          {items.map((pr) => (
             <article
               key={pr.id}
               className="rounded-xl border border-slate-800 bg-slate-900/40 p-5"

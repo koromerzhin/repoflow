@@ -133,22 +133,33 @@ export function getRepositories(
 }
 
 export function getPullRequests(
-  params: { repository?: string } & Refreshable = {},
+  params: { repository?: string; search?: string } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<PullRequestListResponse> {
   return request<PullRequestListResponse>(
-    `/v1/pull-requests${buildQuery({ repository: params.repository }, params.refresh)}`,
+    `/v1/pull-requests${buildQuery(
+      { repository: params.repository, search: params.search },
+      params.refresh,
+    )}`,
     { signal },
   )
 }
 
 export function getIssues(
-  params: { repository?: string; state?: 'open' | 'closed' | 'all' } & Refreshable = {},
+  params: {
+    repository?: string
+    state?: 'open' | 'closed' | 'all'
+    search?: string
+  } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<IssueListResponse> {
   return request<IssueListResponse>(
     `/v1/issues${buildQuery(
-      { repository: params.repository, state: params.state },
+      {
+        repository: params.repository,
+        state: params.state,
+        search: params.search,
+      },
       params.refresh,
     )}`,
     { signal },

@@ -76,6 +76,16 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 - Connexion GitHub réelle (dépôts, PR, checks CI, revues) avec pagination,
   requêtes conditionnelles (ETag), chargements coalescés, gestion du rate
   limit et erreurs normalisées ; fusion `squash` contrôlée.
+- **GitHub App** (optionnel) : authentification par jeton d'installation
+  (`REPOFLOW_GITHUB_APP_*`), échange clé privée → JWT → jeton renouvelé
+  automatiquement avant expiration ; quota 15 000 requêtes/h.
+- **Transport GraphQL** optionnel (`REPOFLOW_GITHUB_USE_GRAPHQL`) : la liste
+  des pull requests est ramenée par une requête unique par dépôt (checks et
+  revues incluses) au lieu de 4-5 requêtes REST par PR.
+- **Recherche serveur** sur les pull requests et les issues (`?search=`,
+  insensible à la casse et aux accents) ; filtres issues par libellé,
+  assigné et jalon.
+- **Thème clair** en complément du thème sombre (bascule persistée).
 - Base SQLite ou **PostgreSQL** (migrations Alembic, options de pool
   configurables).
 - **Observabilité** : identifiant de corrélation par requête (`X-Request-ID`)
@@ -91,7 +101,6 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 
 ### À venir
 
-- Configuration de l'échange clé privée → jeton d'installation (GitHub App).
 - Exécution du worker en service séparé dédié (image partagée).
 
 ## Technologies

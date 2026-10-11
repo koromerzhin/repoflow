@@ -18,11 +18,42 @@ body,
 
 body {
   margin: 0;
-  background-color: #020617;
-  color: #e2e8f0;
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-200);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * Thème clair : inversion de la palette slate et assombrissement des
+ * teintes d'accent utilisées comme texte. Toutes les classes utilitaires
+ * existantes (bg-slate-*, text-slate-*, border-slate-*…) suivent
+ * automatiquement, sans changer les composants.
+ */
+html.theme-light {
+  color-scheme: light;
+  --color-slate-50: oklch(20.8% 0.042 265.755);
+  --color-slate-100: oklch(20.8% 0.042 265.755);
+  --color-slate-200: oklch(44.6% 0.043 257.281);
+  --color-slate-300: oklch(44.6% 0.043 257.281);
+  --color-slate-400: oklch(55.4% 0.046 257.417);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(70.4% 0.04 256.788);
+  --color-slate-700: oklch(86.9% 0.022 252.894);
+  --color-slate-800: oklch(92.9% 0.013 255.508);
+  --color-slate-900: oklch(100% 0 0);
+  --color-slate-950: oklch(98.4% 0.003 247.858);
+  --color-sky-300: oklch(58.8% 0.158 241.966);
+  --color-sky-400: oklch(58.8% 0.158 241.966);
+  --color-indigo-400: oklch(51.1% 0.262 276.966);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(59.6% 0.145 163.225);
+  --color-amber-200: oklch(47.6% 0.114 61.907);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+  --color-amber-400: oklch(66.6% 0.179 58.318);
+  --color-red-200: oklch(44.4% 0.177 26.899);
+  --color-red-300: oklch(50.5% 0.213 27.518);
 }
 
 @media (prefers-reduced-motion: reduce) {

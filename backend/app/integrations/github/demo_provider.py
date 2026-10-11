@@ -336,6 +336,9 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 2 * day,
                 updated_at=now - timedelta(hours=5),
+                labels=["bug", "authentification"],
+                assignees=["lea.b"],
+                milestone="Sprint 12",
                 html_url="https://github.com/acme/web-app/issues/201",
             ),
             IssueRecord(
@@ -348,6 +351,9 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 4 * day,
                 updated_at=now - day,
+                labels=["accessibilité", "ui"],
+                assignees=["camille.m"],
+                milestone="Sprint 12",
                 html_url="https://github.com/acme/web-app/issues/198",
             ),
             IssueRecord(
@@ -360,6 +366,7 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 6 * day,
                 updated_at=now - 2 * day,
+                labels=["performance"],
                 html_url="https://github.com/acme/web-app/issues/194",
             ),
             IssueRecord(
@@ -372,6 +379,8 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 12 * day,
                 updated_at=now - 8 * day,
+                labels=["documentation"],
+                assignees=["sami.h"],
                 html_url="https://github.com/acme/web-app/issues/180",
             ),
             IssueRecord(
@@ -384,6 +393,9 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 3 * day,
                 updated_at=now - timedelta(hours=9),
+                labels=["bug", "observabilité"],
+                assignees=["sami.h"],
+                milestone="Sprint 13",
                 html_url="https://github.com/acme/api-gateway/issues/53",
             ),
             IssueRecord(
@@ -396,6 +408,9 @@ class DemoProvider:
                 is_pull_request=False,
                 created_at=now - 5 * day,
                 updated_at=now - 2 * day,
+                labels=["fiabilité"],
+                assignees=["camille.m"],
+                milestone="Sprint 13",
                 html_url="https://github.com/acme/api-gateway/issues/49",
             ),
             IssueRecord(

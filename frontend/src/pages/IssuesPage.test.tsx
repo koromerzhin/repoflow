@@ -27,8 +27,21 @@ const repositories: RepositoryListResponse = {
       html_url: 'https://github.com/acme/web-app',
       is_demo: true,
     },
+    {
+      id: 'repo-2',
+      owner: 'acme',
+      name: 'api-gateway',
+      full_name: 'acme/api-gateway',
+      default_branch: 'main',
+      private: true,
+      open_issues_count: 2,
+      open_pull_requests_count: 0,
+      last_updated: '2026-01-01T11:00:00Z',
+      html_url: 'https://github.com/acme/api-gateway',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
 }
 
@@ -42,13 +55,32 @@ const issues: IssueListResponse = {
       author: 'lea.b',
       state: 'open',
       is_pull_request: false,
+      labels: ['bug', 'authentification'],
+      assignees: ['lea.b'],
+      milestone: 'Sprint 12',
       created_at: '2026-01-01T08:00:00Z',
       updated_at: '2026-01-02T08:00:00Z',
       html_url: 'https://github.com/acme/web-app/issues/201',
       is_demo: true,
     },
+    {
+      id: 'issue-2',
+      number: 53,
+      repository_full_name: 'acme/api-gateway',
+      title: 'Échecs intermittents sur le endpoint /metrics',
+      author: 'sami.h',
+      state: 'open',
+      is_pull_request: false,
+      labels: ['bug', 'observabilité'],
+      assignees: ['sami.h'],
+      milestone: 'Sprint 13',
+      created_at: '2026-01-01T09:00:00Z',
+      updated_at: '2026-01-02T09:00:00Z',
+      html_url: 'https://github.com/acme/api-gateway/issues/53',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
 }
 
@@ -73,7 +105,7 @@ describe('IssuesPage', () => {
       ).toBeInTheDocument(),
     )
     expect(screen.getByText('#201')).toBeInTheDocument()
-    expect(screen.getByText('Ouverte')).toBeInTheDocument()
+    expect(screen.getAllByText('Ouverte')).toHaveLength(2)
     expect(getIssues).toHaveBeenCalled()
   })
 
@@ -88,7 +120,7 @@ describe('IssuesPage', () => {
     )
   })
 
-  it('filtre les issues par recherche texte', async () => {
+  it('filtre les issues par recherche texte côté serveur', async () => {
     const user = userEvent.setup()
     vi.mocked(getRepositories).mockResolvedValue(repositories)
     vi.mocked(getIssues).mockResolvedValue(issues)
@@ -104,14 +136,50 @@ describe('IssuesPage', () => {
     await user.type(screen.getByRole('searchbox'), 'réinitialisation')
 
     await waitFor(() => {
+      expect(getIssues).toHaveBeenLastCalledWith(
+        { state: 'open', search: 'réinitialisation', refresh: false },
+        expect.anything(),
+      )
+    })
+  })
+
+  it('filtre les issues par libellé et assigné', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('bug').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('authentification').length).toBeGreaterThan(0)
+    expect(screen.getByText(/@lea\.b/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Sprint 12/).length).toBeGreaterThan(0)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Libellé' }), 'observabilité')
+    await waitFor(() => {
+      expect(screen.getByText('Échecs intermittents sur le endpoint /metrics')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Le lien de réinitialisation expire trop vite'),
+      ).not.toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Libellé' }), '')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Assigné' }), 'lea.b')
+    await waitFor(() => {
       expect(
         screen.getByText('Le lien de réinitialisation expire trop vite'),
       ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Échecs intermittents sur le endpoint /metrics'),
+      ).not.toBeInTheDocument()
     })
 
-    await user.clear(screen.getByRole('searchbox'))
-    await user.type(screen.getByRole('searchbox'), 'inexistant')
-
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Jalon' }), 'Sprint 13')
     await waitFor(() => {
       expect(
         screen.getByText('Aucune issue ne correspond à cette recherche.'),

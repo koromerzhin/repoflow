@@ -16,6 +16,7 @@ Ce module ne contient aucune logique métier.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,7 +68,7 @@ class GitHubClient:
 
     def __init__(
         self,
-        token: str,
+        token: str | None,
         api_url: str,
         *,
         timeout: float = 30.0,
@@ -76,21 +77,26 @@ class GitHubClient:
         max_retry_after: float = 5.0,
         max_conditional_entries: int = 512,
         transport: httpx.AsyncBaseTransport | None = None,
+        token_provider: Callable[[], Awaitable[str]] | None = None,
     ) -> None:
         self._per_page = per_page
         self._max_pages = max_pages
         self._max_retry_after = max_retry_after
         self._max_conditional_entries = max_conditional_entries
         self._conditional: dict[str, _ConditionalEntry] = {}
+        self._token_provider = token_provider
         # Le token est placé dans un en-tête (jamais dans l'URL ni les logs).
+        # Absent lorsque l'authentification passe par un ``token_provider``.
+        headers: dict[str, str] = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": _API_VERSION,
+            "User-Agent": _USER_AGENT,
+        }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.AsyncClient(
             base_url=api_url.rstrip("/"),
-            headers={
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": _API_VERSION,
-                "User-Agent": _USER_AGENT,
-                "Authorization": f"Bearer {token}",
-            },
+            headers=headers,
             timeout=timeout,
             transport=transport,
         )
@@ -196,8 +202,12 @@ class GitHubClient:
         effectuée après le délai indiqué (plafonné), puis l'erreur éventuelle
         est levée normalement.
         """
+        request_headers = dict(headers or {})
+        if self._token_provider is not None:
+            token = await self._token_provider()
+            request_headers["Authorization"] = f"Bearer {token}"
         response = await self._client.request(
-            method, path, params=params, json=json, headers=headers
+            method, path, params=params, json=json, headers=request_headers
         )
         self._record_rate_limit(response)
         delay = self._retry_after_seconds(response)
@@ -205,7 +215,7 @@ class GitHubClient:
             logger.info("Limite secondaire GitHub ; nouvelle tentative dans %.1fs.", delay)
             await asyncio.sleep(delay)
             response = await self._client.request(
-                method, path, params=params, json=json, headers=headers
+                method, path, params=params, json=json, headers=request_headers
             )
         return response
 
@@ -227,6 +237,35 @@ class GitHubClient:
         body = response.json()
         self._store_conditional(key, response.headers.get("etag"), body, None)
         return body
+
+    async def execute_graphql(
+        self, query: str, variables: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Exécute une requête GraphQL et renvoie le champ ``data``.
+
+        Une réponse contenant des ``errors`` GraphQL (avec ou sans ``data``)
+        lève ``ProviderError`` : une erreur partielle n'est jamais traitée
+        comme un succès.
+        """
+        response = await self._send_with_retry(
+            "POST", "/graphql", json={"query": query, "variables": variables or {}}
+        )
+        self._raise_for_status(response)
+        payload = response.json()
+        errors = payload.get("errors")
+        if errors:
+            message = errors[0].get("message") if isinstance(errors[0], dict) else str(errors[0])
+            raise ProviderError(
+                f"Requête GraphQL GitHub refusée : {message}",
+                code="github_graphql_error",
+            )
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            raise ProviderError(
+                "Réponse GraphQL GitHub vide ou invalide.",
+                code="github_graphql_error",
+            )
+        return data
 
     async def put(self, path: str, json: dict[str, Any] | None = None) -> Any:
         """Effectue une requête PUT et renvoie le JSON décodé.

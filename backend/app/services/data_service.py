@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import unicodedata
+
 from app.core.cache import get_or_load
 from app.core.config import get_settings
 from app.core.i18n import DEFAULT_LOCALE
@@ -100,6 +102,7 @@ async def get_pull_requests(
     provider: Provider,
     repository_full_name: str | None = None,
     *,
+    search: str | None = None,
     refresh: bool = False,
     locale: str = DEFAULT_LOCALE,
 ) -> list[PullRequest]:
@@ -110,7 +113,19 @@ async def get_pull_requests(
         lambda: provider.list_pull_requests(repository_full_name),
         refresh=refresh,
     )
-    return [pull_request_to_schema(pr, is_demo=provider.is_demo, locale=locale) for pr in records]
+    return [
+        pull_request_to_schema(pr, is_demo=provider.is_demo, locale=locale)
+        for pr in records
+        if matches_query(
+            pr.title,
+            pr.author,
+            pr.number,
+            pr.repository_full_name,
+            pr.source_branch,
+            pr.target_branch,
+            query=search,
+        )
+    ]
 
 
 def pull_request_detail_to_schema(
@@ -155,6 +170,9 @@ def issue_to_schema(issue: IssueRecord, *, is_demo: bool) -> Issue:
         author=issue.author,
         state=issue.state,
         is_pull_request=issue.is_pull_request,
+        labels=list(issue.labels),
+        assignees=list(issue.assignees),
+        milestone=issue.milestone,
         created_at=issue.created_at,
         updated_at=issue.updated_at,
         html_url=issue.html_url,
@@ -162,11 +180,31 @@ def issue_to_schema(issue: IssueRecord, *, is_demo: bool) -> Issue:
     )
 
 
+def matches_query(*values: object, query: str | None) -> bool:
+    """Filtre texte insensible à la casse et aux accents.
+
+    Appliqué après la mise en cache : le cache conserve toujours la liste
+    complète du fournisseur.
+    """
+    normalized = _normalize(query or "")
+    if not normalized:
+        return True
+    haystack = _normalize(" ".join(str(value) for value in values if value is not None))
+    return normalized in haystack
+
+
+def _normalize(value: str) -> str:
+    """Normalise pour la recherche : casse et accents neutralisés."""
+    decomposed = unicodedata.normalize("NFD", value.strip().lower())
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 async def get_issues(
     provider: Provider,
     repository_full_name: str | None = None,
     state: str | None = None,
     *,
+    search: str | None = None,
     refresh: bool = False,
 ) -> list[Issue]:
     """Issues disponibles auprès du fournisseur (mise en cache TTL)."""
@@ -176,7 +214,20 @@ async def get_issues(
         lambda: provider.list_issues(repository_full_name, state=state),
         refresh=refresh,
     )
-    return [issue_to_schema(issue, is_demo=provider.is_demo) for issue in records]
+    return [
+        issue_to_schema(issue, is_demo=provider.is_demo)
+        for issue in records
+        if matches_query(
+            issue.title,
+            issue.author,
+            issue.number,
+            issue.repository_full_name,
+            *issue.labels,
+            *issue.assignees,
+            issue.milestone,
+            query=search,
+        )
+    ]
 
 
 async def get_combined_data(

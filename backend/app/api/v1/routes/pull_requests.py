@@ -21,6 +21,11 @@ async def pull_requests(
     request: Request,
     provider: ProviderDep,
     repository: str | None = Query(default=None, description="Filtre par dépôt (owner/name)."),
+    search: str | None = Query(
+        default=None,
+        max_length=200,
+        description="Recherche texte (titre, auteur, numéro, dépôt, branches).",
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     refresh: bool = Query(default=False, description="Ignore le cache et recharge les données."),
 ) -> PullRequestListResponse:
@@ -28,6 +33,7 @@ async def pull_requests(
     items = await get_pull_requests(
         provider,
         repository_full_name=repository,
+        search=search,
         refresh=refresh,
         locale=get_locale(request),
     )

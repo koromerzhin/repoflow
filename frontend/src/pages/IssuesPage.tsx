@@ -15,7 +15,6 @@ import { useAsync, useResource } from '@/hooks/useAsync'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useUrlState } from '@/hooks/useUrlState'
 import { formatDateTime } from '@/lib/status'
-import { matchesQuery } from '@/lib/search'
 import { getIssues, getRepositories } from '@/services/apiClient'
 import type { IssueState } from '@/types/api'
 
@@ -27,12 +26,21 @@ const stateOptions: { value: StateFilter; labelKey: string }[] = [
   { value: 'all', labelKey: 'issues.state.all' },
 ]
 
+function distinctSorted(values: (string | null)[]): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort(
+    (a, b) => a.localeCompare(b),
+  )
+}
+
 export function IssuesPage() {
   const { t } = useTranslation()
   const [repository, setRepository] = useUrlState('repository', '')
   const [stateParam, setStateParam] = useUrlState('state', 'open')
   const [query, setQuery] = useUrlState('q', '')
   const [autoSeconds, setAutoSeconds] = useState(0)
+  const [labelFilter, setLabelFilter] = useState('')
+  const [assigneeFilter, setAssigneeFilter] = useState('')
+  const [milestoneFilter, setMilestoneFilter] = useState('')
   const state: StateFilter = (stateOptions.some((option) => option.value === stateParam)
     ? stateParam
     : 'open') as StateFilter
@@ -44,28 +52,37 @@ export function IssuesPage() {
         {
           repository: repository || undefined,
           state,
+          search: query || undefined,
           refresh: options.refresh,
         },
         signal,
       ),
-    [repository, state],
+    [repository, state, query],
   )
   useAutoRefresh(issues.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
-  const filteredItems = useMemo(() => {
-    const items = issues.data?.items ?? []
-    if (!query.trim()) {
-      return items
-    }
-    return items.filter((issue) =>
-      matchesQuery(
-        `${issue.title} ${issue.author} ${issue.number} ${issue.repository_full_name}`,
-        query,
-      ),
-    )
-  }, [issues.data, query])
+  const allItems = useMemo(() => issues.data?.items ?? [], [issues.data])
+  const labelOptions = useMemo(() => distinctSorted(allItems.flatMap((i) => i.labels)), [allItems])
+  const assigneeOptions = useMemo(() => distinctSorted(allItems.flatMap((i) => i.assignees)), [
+    allItems,
+  ])
+  const milestoneOptions = useMemo(
+    () => distinctSorted(allItems.map((i) => i.milestone)),
+    [allItems],
+  )
 
-  const searching = query.trim().length > 0
+  const filteredItems = useMemo(
+    () =>
+      allItems.filter(
+        (issue) =>
+          (!labelFilter || issue.labels.includes(labelFilter)) &&
+          (!assigneeFilter || issue.assignees.includes(assigneeFilter)) &&
+          (!milestoneFilter || issue.milestone === milestoneFilter),
+      ),
+    [allItems, labelFilter, assigneeFilter, milestoneFilter],
+  )
+
+  const searching = query.trim().length > 0 || labelFilter || assigneeFilter || milestoneFilter
   const visibility = useMemo(
     () =>
       new Map(
@@ -110,6 +127,51 @@ export function IssuesPage() {
             </option>
           ))}
         </select>
+        {labelOptions.length > 0 ? (
+          <select
+            aria-label={t('issues.filterLabel')}
+            value={labelFilter}
+            onChange={(event) => setLabelFilter(event.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+          >
+            <option value="">{t('issues.anyLabel')}</option>
+            {labelOptions.map((label) => (
+              <option key={label} value={label}>
+                {label}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {assigneeOptions.length > 0 ? (
+          <select
+            aria-label={t('issues.filterAssignee')}
+            value={assigneeFilter}
+            onChange={(event) => setAssigneeFilter(event.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+          >
+            <option value="">{t('issues.anyAssignee')}</option>
+            {assigneeOptions.map((assignee) => (
+              <option key={assignee} value={assignee}>
+                {assignee}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {milestoneOptions.length > 0 ? (
+          <select
+            aria-label={t('issues.filterMilestone')}
+            value={milestoneFilter}
+            onChange={(event) => setMilestoneFilter(event.target.value)}
+            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+          >
+            <option value="">{t('issues.anyMilestone')}</option>
+            {milestoneOptions.map((milestone) => (
+              <option key={milestone} value={milestone}>
+                {milestone}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <div className="ml-auto flex items-center gap-2">
           <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
           <RefreshButton onClick={issues.refresh} loading={issues.loading} />
@@ -143,7 +205,27 @@ export function IssuesPage() {
                     {issue.repository_full_name}
                     <VisibilityBadge isPrivate={visibility.get(issue.repository_full_name)} /> ·{' '}
                     {issue.author}
+                    {issue.assignees.length > 0 ? (
+                      <span className="text-slate-500">
+                        · {t('issues.assignedTo')} {issue.assignees.map((a) => `@${a}`).join(', ')}
+                      </span>
+                    ) : null}
+                    {issue.milestone ? (
+                      <span className="text-slate-500">· {issue.milestone}</span>
+                    ) : null}
                   </p>
+                  {issue.labels.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {issue.labels.map((label) => (
+                        <span
+                          key={label}
+                          className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300 ring-1 ring-inset ring-sky-500/20"
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <IssueStateBadge state={issue.state} />
               </div>

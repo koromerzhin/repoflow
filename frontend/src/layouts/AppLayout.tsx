@@ -7,6 +7,7 @@ import { Badge } from '@/components/Badge'
 import { Drawer } from '@/components/Drawer'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
 import { Sidebar } from '@/components/Sidebar'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAsync } from '@/hooks/useAsync'
 import { getHealth } from '@/services/apiClient'
 
@@ -87,6 +88,7 @@ export function AppLayout() {
                 {t('app.githubQuota', { remaining: health.github_rate_limit.remaining })}
               </Badge>
             ) : null}
+            <ThemeToggle />
             <LanguageSwitcher />
           </div>
         </header>

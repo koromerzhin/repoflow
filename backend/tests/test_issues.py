@@ -50,3 +50,30 @@ def test_issues_limit(client: TestClient) -> None:
 def test_issues_etat_invalide(client: TestClient) -> None:
     response = client.get("/api/v1/issues", params={"state": "bogus"})
     assert response.status_code == 422
+
+
+def test_issues_exposent_labels_assignes_jalon(client: TestClient) -> None:
+    payload = _get_issues(client, search="réinitialisation")
+    assert payload["total"] == 1
+    item = payload["items"][0]
+    assert item["labels"] == ["bug", "authentification"]
+    assert item["assignees"] == ["lea.b"]
+    assert item["milestone"] == "Sprint 12"
+
+
+def test_issues_recherche_serveur_par_label(client: TestClient) -> None:
+    payload = _get_issues(client, search="observabilité")
+    assert payload["total"] == 1
+    assert payload["items"][0]["number"] == 53
+
+
+def test_issues_recherche_serveur_sans_accent(client: TestClient) -> None:
+    payload = _get_issues(client, search="reinitialisation")
+    assert payload["total"] == 1
+    assert payload["items"][0]["number"] == 201
+
+
+def test_issues_recherche_sans_resultat(client: TestClient) -> None:
+    payload = _get_issues(client, search="inexistant")
+    assert payload["total"] == 0
+    assert payload["items"] == []

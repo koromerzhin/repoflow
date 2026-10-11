@@ -178,6 +178,9 @@ export interface Issue {
   author: string
   state: IssueState
   is_pull_request: boolean
+  labels: string[]
+  assignees: string[]
+  milestone: string | null
   created_at: string
   updated_at: string
   html_url: string
