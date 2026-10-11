@@ -1,14 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TFunction } from 'i18next'
 
+import { getUnauthorized, resetAuth, setToken } from '@/lib/auth'
 import {
   ApiError,
+  apiErrorMessage,
   createRepositoryConfig,
   deleteRepositoryConfig,
+  exportAudit,
   getAudit,
   getHealth,
   getIssues,
   getPullRequestDetail,
   getPullRequests,
+  getSnapshots,
   setKillSwitch,
   updateRule,
 } from '@/services/apiClient'
@@ -27,11 +32,13 @@ const healthPayload = {
 describe('apiClient', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
+    resetAuth()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    resetAuth()
   })
 
   it('retourne les données en cas de succès', async () => {
@@ -73,6 +80,34 @@ describe('apiClient', () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
 
     await expect(getHealth()).rejects.toMatchObject({ code: 'network_error', status: 0 })
+  })
+
+  it('signale une erreur HTTP sans corps interprétable', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
+
+    await expect(getHealth()).rejects.toMatchObject({ code: 'http_error', status: 500 })
+  })
+
+  describe('apiErrorMessage', () => {
+    const identity = ((key: string) => key) as unknown as TFunction
+
+    it('traduit une erreur réseau', () => {
+      const error = new ApiError('network', 0, 'network_error')
+      expect(apiErrorMessage(error, identity)).toBe('api.networkError')
+    })
+
+    it('traduit une erreur HTTP avec le statut', () => {
+      const error = new ApiError('http', 500, 'http_error')
+      const t = ((key: string, options?: { status?: number }) =>
+        key === 'api.httpError' ? `failed (${options?.status})` : key) as unknown as TFunction
+      expect(apiErrorMessage(error, t)).toBe('failed (500)')
+    })
+
+    it('conserve le message localisé du backend', () => {
+      const error = new ApiError('Ressource absente.', 404, 'not_found')
+      expect(apiErrorMessage(error, identity)).toBe('Ressource absente.')
+    })
   })
 
   it('construit le filtre de dépôt dans la requête', async () => {
@@ -123,6 +158,22 @@ describe('apiClient', () => {
     )
   })
 
+  it('transmet l’offset de pagination dans la requête', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getPullRequests({ offset: 100 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/pull-requests?offset=100',
+      expect.anything(),
+    )
+  })
+
   it('construit l’URL du détail de pull request', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValue(
@@ -135,6 +186,22 @@ describe('apiClient', () => {
     await getPullRequestDetail(142, 'acme/web-app')
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/pull-requests/142?repository=acme%2Fweb-app',
+      expect.anything(),
+    )
+  })
+
+  it('construit les filtres de la requête snapshots', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getSnapshots({ repository: 'acme/web-app', since: '2026-01-01', limit: 500 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/snapshots?repository=acme%2Fweb-app&since=2026-01-01&limit=500',
       expect.anything(),
     )
   })
@@ -216,5 +283,81 @@ describe('apiClient', () => {
       '/api/v1/audit?event_type=merge_succeeded&repository=acme%2Fweb-app',
       expect.anything(),
     )
+  })
+
+  it('ajoute le jeton porteur quand il est présent', async () => {
+    setToken('jeton-test')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(healthPayload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getHealth()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/health',
+      expect.objectContaining({
+        headers: { Accept: 'application/json', Authorization: 'Bearer jeton-test' },
+      }),
+    )
+  })
+
+  it('signale un accès non autorisé sur 401', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: 'unauthorized', message: 'Refusé.' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await expect(getHealth()).rejects.toBeInstanceOf(ApiError)
+    expect(getUnauthorized()).toBe(true)
+  })
+
+  it('exporte le journal avec l’en-tête d’autorisation', async () => {
+    setToken('jeton-test')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response('id,message\n1,ok', {
+        status: 200,
+        headers: {
+          'Content-Disposition': 'attachment; filename="repoflow-audit-20260101.csv"',
+        },
+      }),
+    )
+
+    const result = await exportAudit({ event_type: 'analysis', format: 'csv' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/audit/export?event_type=analysis&format=csv',
+      expect.objectContaining({ headers: { Authorization: 'Bearer jeton-test' } }),
+    )
+    expect(result.filename).toBe('repoflow-audit-20260101.csv')
+    expect(result.content).toContain('id,message')
+  })
+
+  it('exporte en JSON avec un nom par défaut', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('[]', { status: 200 }))
+
+    const result = await exportAudit({ format: 'json' })
+    expect(result.filename).toBe('repoflow-audit.json')
+  })
+
+  it('signale une erreur HTTP à l’export', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('boom', { status: 500 }))
+
+    await expect(exportAudit()).rejects.toMatchObject({ code: 'http_error', status: 500 })
+  })
+
+  it('marque non autorisé si l’export renvoie 401', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(new Response('', { status: 401 }))
+
+    await expect(exportAudit()).rejects.toBeInstanceOf(ApiError)
+    expect(getUnauthorized()).toBe(true)
   })
 })

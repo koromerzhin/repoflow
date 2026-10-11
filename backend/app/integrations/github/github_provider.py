@@ -10,9 +10,12 @@ effectuée : ce fournisseur est strictement en lecture seule.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+
 from app.core.errors import NotFoundError
 from app.core.logging import get_logger
 from app.integrations.github.client import GitHubClient
+from app.integrations.github.graphql import PULL_REQUESTS_QUERY, pull_requests_page
 from app.integrations.github.mapping import (
     map_combined_checks,
     map_issue,
@@ -42,20 +45,25 @@ class GithubProvider:
 
     def __init__(
         self,
-        token: str,
+        token: str | None = None,
         api_url: str = "https://api.github.com",
         *,
         timeout: float = 30.0,
         per_page: int = 100,
         max_pages: int = 10,
         client: GitHubClient | None = None,
+        token_provider: Callable[[], Awaitable[str]] | None = None,
+        use_graphql: bool = False,
     ) -> None:
+        self._max_pages = max_pages
+        self._use_graphql = use_graphql
         self._client = client or GitHubClient(
             token,
             api_url,
             timeout=timeout,
             per_page=per_page,
             max_pages=max_pages,
+            token_provider=token_provider,
         )
 
     async def aclose(self) -> None:
@@ -94,14 +102,17 @@ class GithubProvider:
             logger.warning("Nom de dépôt ignoré car invalide : %s", full_name)
             return []
 
+        if self._use_graphql:
+            return await self._pull_requests_graphql(owner, name, full_name)
+
         listed = await self._client.get_paginated(f"/repos/{owner}/{name}/pulls", {"state": "open"})
 
         results: list[PullRequestRecord] = []
         for item in listed:
             number = int(item["number"])
             # L'endpoint de liste n'expose ni mergeable ni les statistiques de
-            # diff : on récupère le détail. Une optimisation GraphQL pourra
-            # réduire le nombre de requêtes ultérieurement.
+            # diff : on récupère le détail. Le transport GraphQL (config
+            # ``use_graphql``) remplace ce chemin par une requête agrégée.
             detail = await self._client.get(f"/repos/{owner}/{name}/pulls/{number}")
             head_sha = str((detail.get("head") or {}).get("sha") or "")
             checks = await self._checks(owner, name, head_sha)
@@ -116,6 +127,40 @@ class GithubProvider:
                     map_review_decision(reviews),
                 )
             )
+        return results
+
+    async def _pull_requests_graphql(
+        self, owner: str, name: str, full_name: str
+    ) -> list[PullRequestRecord]:
+        """Pull requests via une requête GraphQL agrégée (1 requête par page).
+
+        Checks CI et revues sont récupérés dans la même requête, ce qui divise
+        fortement la consommation de quota par rapport à l'API REST.
+        """
+        results: list[PullRequestRecord] = []
+        cursor: str | None = None
+        page = 0
+        while True:
+            data = await self._client.execute_graphql(
+                PULL_REQUESTS_QUERY,
+                {"owner": owner, "name": name, "first": 50, "after": cursor},
+            )
+            items, cursor = pull_requests_page(data)
+            for item in items:
+                checks = map_combined_checks(item.pop("_check_runs"), item.pop("_statuses"))
+                reviews = item.pop("_reviews")
+                results.append(
+                    map_pull_request(item, full_name, checks, map_review_decision(reviews))
+                )
+            page += 1
+            if not cursor:
+                break
+            if page >= self._max_pages:
+                logger.warning(
+                    "Pagination GraphQL interrompue après %s pages (limite configurée).",
+                    self._max_pages,
+                )
+                break
         return results
 
     async def get_pull_request(

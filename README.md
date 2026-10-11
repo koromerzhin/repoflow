@@ -13,6 +13,28 @@ et de préparer la fusion des pull requests selon des règles configurables.
 > n'a lieu que si une règle l'autorise, que la PR est éligible et que
 > l'arrêt d'urgence est désengagé.
 
+## Démarrage rapide (Docker Compose)
+
+Le moyen le plus simple, si Docker est installé — aucun prérequis Python/Node :
+
+```bash
+git clone <url-du-depot> repoflow
+cd repoflow
+cp .env.example .env
+docker compose up --build
+```
+
+- Interface : http://localhost:5173
+- API : http://localhost:8000 (documentation Swagger : `/docs`)
+- Par défaut : **mode démonstration** (données fictives, aucun jeton requis)
+  et base SQLite persistée dans un volume Docker.
+
+Pour brancher des vraies données GitHub, éditer `.env` :
+`REPOFLOW_GITHUB_PROVIDER=github` et renseigner `REPOFLOW_GITHUB_TOKEN`
+(voir `docs/github-integration.md`). Pour utiliser PostgreSQL : pointer
+`REPOFLOW_DATABASE_URL` vers le service `postgres` du compose, puis lancer
+`docker compose --profile postgres up --build` (détails plus bas).
+
 ## Fonctionnalités
 
 ### Disponibles
@@ -26,7 +48,10 @@ et de préparer la fusion des pull requests selon des règles configurables.
   requests sont exclues de cette liste.
 - Détail d'une pull request `GET /api/v1/pull-requests/{number}` : fichiers
   modifiés, revues et timeline, avec page frontend dédiée.
-- Cache TTL mémoire des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`)
+- Cache TTL des données du fournisseur (`REPOFLOW_CACHE_TTL_SECONDS`),
+  backend **mémoire** (défaut) ou **Redis partagé** entre instances
+  (`REPOFLOW_CACHE_BACKEND=redis`, `REPOFLOW_CACHE_REDIS_URL`) avec repli
+  automatique sur mémoire en cas de panne.
   et rafraîchissement manuel via `?refresh=true` ou les boutons « Rafraîchir ».
 - Configuration des dépôts suivis et des règles d'automatisation
   (`/api/v1/configs/*`) : CRUD complet, validation stricte côté serveur.
@@ -35,14 +60,39 @@ et de préparer la fusion des pull requests selon des règles configurables.
   éligibles en `squash` lorsque l'automatisation est explicitement autorisée.
 - État des automatisations et arrêt d'urgence global
   (`GET /api/v1/automation/status`, `POST /api/v1/automation/kill-switch`).
-- Journal d'audit persistant consultable (`GET /api/v1/audit`) : analyses,
-  décisions, fusions réussies ou bloquées.
-- Interface React sombre, en français, responsive : navigation, tableau de
-  bord, dépôts, pull requests, détail de PR, issues, automatisations,
-  historique, états de chargement / erreur / vide.
+- Journal d'audit persistant consultable (`GET /api/v1/audit`, pagination par
+  curseur `before_id`) : analyses, décisions, fusions réussies ou bloquées ;
+  rétention configurable (`REPOFLOW_AUDIT_RETENTION_DAYS`, purge par le
+  worker).
+- Suivi du quota GitHub : dernier état `X-RateLimit-*` observé exposé par
+  `GET /api/health` (`github_rate_limit`) et badge d'avertissement dans
+  l'interface quand le quota restant est bas.
+- **Historisation quotidienne** : le worker persiste un agrégat par dépôt et
+  par jour dans `daily_snapshots` (PR ouvertes, prêtes à fusionner, checks
+  en échec/en cours, issues ouvertes), consultable via
+  `GET /api/v1/snapshots`.
+- Interface React sombre, **bilingue français / anglais** (détection du
+  navigateur, bascule manuelle persistée, `?lang=en`), responsive :
+  navigation, tableau de bord, dépôts, pull requests, détail de PR, issues,
+  automatisations, historique, états de chargement / erreur / vide. Les
+  messages d'erreur de l'API suivent l'en-tête `Accept-Language`. Filtres
+  persistés dans l'URL, rafraîchissement automatique optionnel, moteur de
+  recherche insensible à la casse et aux accents, combobox de dépôts
+  accessible au clavier.
 - Fournisseur de données abstrait (`demo` / `github`).
 - Connexion GitHub réelle (dépôts, PR, checks CI, revues) avec pagination,
-  gestion du rate limit et erreurs normalisées ; fusion `squash` contrôlée.
+  requêtes conditionnelles (ETag), chargements coalescés, gestion du rate
+  limit et erreurs normalisées ; fusion `squash` contrôlée.
+- **GitHub App** (optionnel) : authentification par jeton d'installation
+  (`REPOFLOW_GITHUB_APP_*`), échange clé privée → JWT → jeton renouvelé
+  automatiquement avant expiration ; quota 15 000 requêtes/h.
+- **Transport GraphQL** optionnel (`REPOFLOW_GITHUB_USE_GRAPHQL`) : la liste
+  des pull requests est ramenée par une requête unique par dépôt (checks et
+  revues incluses) au lieu de 4-5 requêtes REST par PR.
+- **Recherche serveur** sur les pull requests et les issues (`?search=`,
+  insensible à la casse et aux accents) ; filtres issues par libellé,
+  assigné et jalon.
+- **Thème clair** en complément du thème sombre (bascule persistée).
 - Base SQLite ou **PostgreSQL** (migrations Alembic, options de pool
   configurables).
 - **Observabilité** : identifiant de corrélation par requête (`X-Request-ID`)
@@ -58,15 +108,15 @@ et de préparer la fusion des pull requests selon des règles configurables.
 
 ### À venir
 
-- Configuration de l'échange clé privée → jeton d'installation (GitHub App).
-- Exécution du worker en service séparé dédié (image partagée).
+- Exécution du worker en service séparé dédié.
 
 ## Technologies
 
 - **Backend** : Python, FastAPI, Pydantic v2, SQLAlchemy 2.x, Alembic, SQLite /
   PostgreSQL, Pytest (+ couverture), Ruff.
-- **Frontend** : React 19, TypeScript (strict), Vite, React Router, Tailwind
-  CSS, lucide-react, ESLint, Vitest (+ couverture), React Testing Library.
+- **Frontend** : React 19, TypeScript (strict), Vite, React Router, i18next
+  (react-i18next), Tailwind CSS, lucide-react, ESLint, Vitest (+ couverture),
+  React Testing Library.
 - **Exécution** : Docker, Docker Compose, GitHub Actions.
 
 ## Prérequis
@@ -92,6 +142,13 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+Pour le support PostgreSQL, installer l'extra correspondant (au lieu de ou en
+plus de `dev`) :
+
+```bash
+pip install -e ".[dev,postgres]"
+```
+
 Lancer le serveur de développement :
 
 ```bash
@@ -105,8 +162,8 @@ uvicorn app.main:app --reload --port 8000
 Par défaut, la base SQLite est créée automatiquement et le mode
 démonstration est actif (aucun token requis).
 
-Le worker d'analyse périodique est désactivé par défaut. Pour l'exécuter
-manuellement (une passe) ou en continu :
+Le worker d'analyse périodique est désactivé par défaut. Pour l'exécuter en
+continu dans un processus séparé :
 
 ```bash
 python -m app.worker
@@ -130,7 +187,9 @@ npm run dev
 Le frontend relaie les appels `/api` vers le backend (proxy Vite), aucune
 configuration CORS supplémentaire n'est nécessaire.
 
-## Exécution via Docker Compose
+## Exécution via Docker Compose (détaillée)
+
+Cf. aussi « Démarrage rapide » en haut de page.
 
 ```bash
 cp .env.example .env
@@ -142,11 +201,12 @@ docker compose up --build
 
 La base SQLite est persistée dans un volume Docker nommé.
 
-Avec PostgreSQL :
+Avec PostgreSQL (profil optionnel) :
 
 ```bash
 # 1. Adapter .env :
-#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:motdepasse@postgres:5432/repoflow
+#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:repoflow@postgres:5432/repoflow
+#    (le mot de passe doit correspondre à REPOFLOW_DB_PASSWORD)
 # 2. Lancer, profil "postgres" inclus :
 docker compose --profile postgres up --build
 ```
@@ -205,9 +265,9 @@ repoflow/
 │   └── pyproject.toml
 ├── frontend/
 │   └── src/
-│       ├── components/  features/  layouts/  pages/
-│       ├── services/    hooks/     lib/      types/
-│       └── main.tsx
+│       ├── components/  layouts/  pages/
+│       ├── hooks/       lib/      services/  types/
+│       └── test/        main.tsx
 ├── docs/                   # architecture, GitHub, guide utilisateur
 ├── .github/workflows/      # CI
 ├── docker-compose.yml

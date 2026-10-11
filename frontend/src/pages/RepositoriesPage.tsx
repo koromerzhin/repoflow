@@ -1,13 +1,17 @@
 import { ExternalLink, Lock, Globe } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useResource } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatDateTime } from '@/lib/status'
 import { getRepositories } from '@/services/apiClient'
 
 export function RepositoriesPage() {
+  const { t } = useTranslation()
+  useDocumentTitle(t('repositories.title'))
   const { data, error, loading, reload, refresh } = useResource(
     (options, signal) => getRepositories(signal, { refresh: options.refresh }),
     [],
@@ -16,8 +20,8 @@ export function RepositoriesPage() {
   return (
     <div>
       <PageHeader
-        title="Dépôts"
-        description="Dépôts GitHub suivis par RepoFlow. Aucun clonage local n'est nécessaire."
+        title={t('repositories.title')}
+        description={t('repositories.description')}
         actions={<RefreshButton onClick={refresh} loading={loading} />}
       />
 
@@ -25,34 +29,34 @@ export function RepositoriesPage() {
         loading={loading}
         error={error}
         isEmpty={data?.items.length === 0}
-        emptyMessage="Aucun dépôt suivi pour le moment."
+        emptyMessage={t('repositories.empty')}
         onRetry={reload}
       >
         <div className="overflow-x-auto rounded-xl border border-slate-800">
           <table className="min-w-full divide-y divide-slate-800 text-sm">
-            <caption className="sr-only">Liste des dépôts suivis</caption>
+            <caption className="sr-only">{t('repositories.caption')}</caption>
             <thead className="bg-slate-900/60 text-left text-xs uppercase tracking-wide text-slate-400">
               <tr>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  Dépôt
+                  {t('repositories.col.repository')}
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  Branche par défaut
+                  {t('repositories.col.defaultBranch')}
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  Visibilité
+                  {t('repositories.col.visibility')}
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-medium">
-                  Issues
+                  {t('repositories.col.issues')}
                 </th>
                 <th scope="col" className="px-4 py-3 text-right font-medium">
-                  PR
+                  {t('repositories.col.pullRequests')}
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  Dernière activité
+                  {t('repositories.col.lastActivity')}
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
-                  <span className="sr-only">Lien</span>
+                  <span className="sr-only">{t('repositories.col.link')}</span>
                 </th>
               </tr>
             </thead>
@@ -72,12 +76,12 @@ export function RepositoriesPage() {
                     {repository.private ? (
                       <span className="inline-flex items-center gap-1.5">
                         <Lock className="size-3.5 text-amber-400" aria-hidden />
-                        Privé
+                        {t('repositories.private')}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5">
                         <Globe className="size-3.5 text-emerald-400" aria-hidden />
-                        Public
+                        {t('repositories.public')}
                       </span>
                     )}
                   </td>
@@ -97,7 +101,7 @@ export function RepositoriesPage() {
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300"
                     >
-                      Ouvrir
+                      {t('repositories.open')}
                       <ExternalLink className="size-3.5" aria-hidden />
                     </a>
                   </td>

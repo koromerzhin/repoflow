@@ -51,7 +51,7 @@ Liste des issues (hors pull requests), filtrable par dépôt et par état.
 
 ### Historique
 Journal d'audit persistant : analyses du worker, décisions, fusions réussies
-ou bloquées. Filtrable par type d'événement et par dépôt.
+ou bloquées. Filtrable par type d'événement et par dépôt. Export CSV ou JSON disponible.
 
 ## Questions fréquentes
 
@@ -81,7 +81,9 @@ ou bloquées. Filtrable par type d'événement et par dépôt.
 | `REPOFLOW_RATE_LIMIT_ENABLED` | Limitation de débit par adresse IP | `false` |
 | `REPOFLOW_RATE_LIMIT_REQUESTS` | Seuil de requêtes par fenêtre | `120` |
 | `REPOFLOW_RATE_LIMIT_WINDOW_SECONDS` | Durée de la fenêtre | `60` |
+| `REPOFLOW_RATE_LIMIT_BACKEND` | Backend du compteur (`memory` ou `redis`) | `memory` |
 
 La limitation de débit est **désactivée par défaut**. Derrière un proxy, la
 renseigner pour protéger l'API des abus ; sans proxy configuré, la clé est
-l'adresse IP du client.
+l'adresse IP du client. Le backend `redis` partage le compteur entre instances
+(repli automatique sur la mémoire locale si Redis est injoignable).

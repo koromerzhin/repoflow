@@ -1,44 +1,66 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useResource } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { downloadTextFile } from '@/lib/download'
 import { auditEventClass, auditEventLabel, formatDateTime } from '@/lib/status'
-import { getAudit } from '@/services/apiClient'
+import { exportAudit, getAudit } from '@/services/apiClient'
 import type { AuditEvent } from '@/types/api'
 
-const eventTypeOptions: { value: string; label: string }[] = [
-  { value: '', label: 'Tous les événements' },
-  { value: 'analysis', label: 'Analyse' },
-  { value: 'analysis_error', label: 'Erreur d’analyse' },
-  { value: 'merge_blocked', label: 'Fusion bloquée' },
-  { value: 'merge_skipped', label: 'Fusion différée' },
-  { value: 'merge_succeeded', label: 'Fusion réussie' },
-  { value: 'merge_failed', label: 'Échec de fusion' },
+const eventTypeOptions: { value: string; labelKey: string }[] = [
+  { value: '', labelKey: 'history.allEvents' },
+  { value: 'analysis', labelKey: 'status.audit.analysis' },
+  { value: 'analysis_error', labelKey: 'status.audit.analysis_error' },
+  { value: 'merge_blocked', labelKey: 'status.audit.merge_blocked' },
+  { value: 'merge_skipped', labelKey: 'status.audit.merge_skipped' },
+  { value: 'merge_succeeded', labelKey: 'status.audit.merge_succeeded' },
+  { value: 'merge_failed', labelKey: 'status.audit.merge_failed' },
 ]
 
-function payloadSummary(event: AuditEvent): string | null {
+function payloadSummary(event: AuditEvent, t: TFunction): string | null {
   const payload = event.payload
   if (!payload) {
     return null
   }
-  if (typeof payload.reason === 'string') {
-    return `Motif : ${payload.reason}`
-  }
   if (Array.isArray(payload.blockers) && payload.blockers.length > 0) {
-    return `Blocages : ${payload.blockers.join(', ')}`
+    return t('history.blockers', { list: payload.blockers.join(', ') })
   }
   if (typeof payload.sha === 'string') {
-    return `Commit : ${payload.sha}`
+    return t('history.commit', { sha: payload.sha })
   }
   return null
 }
 
 export function HistoryPage() {
+  const { t } = useTranslation()
+  useDocumentTitle(t('history.title'))
   const [eventType, setEventType] = useState('')
   const [repository, setRepository] = useState('')
+  const [exporting, setExporting] = useState<'csv' | 'json' | null>(null)
+  const [exportError, setExportError] = useState(false)
+
+  const handleExport = async (format: 'csv' | 'json') => {
+    setExporting(format)
+    setExportError(false)
+    try {
+      const { content, filename } = await exportAudit({
+        event_type: eventType || undefined,
+        repository: repository || undefined,
+        format,
+      })
+      downloadTextFile(filename, content, format === 'json' ? 'application/json' : 'text/csv')
+    } catch {
+      setExportError(true)
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const audit = useResource(
     (options, signal) =>
@@ -53,18 +75,34 @@ export function HistoryPage() {
     [eventType, repository],
   )
 
-  const announcement = audit.data ? `${audit.data.total} événement(s) journalisé(s).` : ''
+  const announcement = audit.data ? t('history.announcement', { total: audit.data.total }) : ''
 
   return (
     <div>
       <PageHeader
-        title="Historique"
-        description="Journal d'audit des analyses, décisions et tentatives de fusion. Lecture seule."
+        title={t('history.title')}
+        description={t('history.description')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <RefreshButton onClick={audit.refresh} loading={audit.loading} />
+            <button
+              type="button"
+              onClick={() => handleExport('csv')}
+              disabled={exporting !== null}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-60"
+            >
+              {exporting === 'csv' ? t('common.loading') : t('history.exportCsv')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExport('json')}
+              disabled={exporting !== null}
+              className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-60"
+            >
+              {exporting === 'json' ? t('common.loading') : t('history.exportJson')}
+            </button>
             <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">Type</span>
+              <span className="hidden sm:inline">{t('history.filterType')}</span>
               <select
                 value={eventType}
                 onChange={(event) => setEventType(event.target.value)}
@@ -72,13 +110,13 @@ export function HistoryPage() {
               >
                 {eventTypeOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">Dépôt</span>
+              <span className="hidden sm:inline">{t('history.filterRepository')}</span>
               <input
                 type="text"
                 value={repository}
@@ -95,16 +133,22 @@ export function HistoryPage() {
         {announcement}
       </p>
 
+      {exportError ? (
+        <p role="alert" className="mb-4 text-sm text-red-300">
+          {t('history.exportError')}
+        </p>
+      ) : null}
+
       <AsyncState
         loading={audit.loading}
         error={audit.error}
         isEmpty={audit.data?.items.length === 0}
-        emptyMessage="Aucun événement dans le journal pour ce filtre."
+        emptyMessage={t('history.empty')}
         onRetry={audit.reload}
       >
         <ul className="space-y-3">
           {audit.data?.items.map((event) => {
-            const summary = payloadSummary(event)
+            const summary = payloadSummary(event, t)
             return (
               <li
                 key={event.id}
@@ -114,7 +158,7 @@ export function HistoryPage() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className={auditEventClass(event.event_type)}>
-                        {auditEventLabel(event.event_type)}
+                        {t(auditEventLabel(event.event_type))}
                       </Badge>
                       {event.repository_full_name ? (
                         <span className="text-sm text-slate-400">

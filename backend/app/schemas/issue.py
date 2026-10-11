@@ -25,6 +25,9 @@ class Issue(BaseModel):
     author: str
     state: IssueState
     is_pull_request: bool = Field(default=False, description="Toujours faux pour cet endpoint.")
+    labels: list[str] = Field(default_factory=list, description="Libellés de l'issue.")
+    assignees: list[str] = Field(default_factory=list, description="Logins des assignés.")
+    milestone: str | None = Field(default=None, description="Titre du jalon, si défini.")
     created_at: datetime
     updated_at: datetime
     html_url: str
@@ -37,3 +40,7 @@ class IssueListResponse(BaseModel):
     items: list[Issue]
     total: int = Field(ge=0)
     data_source: str
+    next_cursor: int | None = Field(
+        default=None,
+        description="Prochain ``offset`` à passer pour la page suivante, si la liste continue.",
+    )

@@ -30,6 +30,11 @@ export interface HealthResponse {
   data_source: DataSource
   database: 'ok' | 'unavailable' | 'not_checked'
   kill_switch_engaged: boolean
+  github_rate_limit?: {
+    remaining: number | null
+    limit: number | null
+    reset_at: string | null
+  } | null
 }
 
 export interface DashboardCounters {
@@ -123,6 +128,7 @@ export interface PullRequestListResponse {
   items: PullRequest[]
   total: number
   data_source: DataSource
+  next_cursor: number | null
 }
 
 export type ReviewState =
@@ -173,6 +179,9 @@ export interface Issue {
   author: string
   state: IssueState
   is_pull_request: boolean
+  labels: string[]
+  assignees: string[]
+  milestone: string | null
   created_at: string
   updated_at: string
   html_url: string
@@ -181,6 +190,25 @@ export interface Issue {
 
 export interface IssueListResponse {
   items: Issue[]
+  total: number
+  data_source: DataSource
+  next_cursor: number | null
+}
+
+export interface Snapshot {
+  id: number
+  repository_full_name: string
+  snapshot_date: string
+  data_source: DataSource
+  open_pull_requests: number
+  pull_requests_ready_to_merge: number
+  pull_requests_with_failing_checks: number
+  pull_requests_pending_checks: number
+  open_issues: number
+}
+
+export interface SnapshotListResponse {
+  items: Snapshot[]
   total: number
   data_source: DataSource
 }

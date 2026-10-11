@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # 0 désactive le cache. Le cache est invalidé par ``?refresh=true``.
     cache_ttl_seconds: int = Field(default=30, ge=0)
 
+    # Backend de cache : ``memory`` (par instance) ou ``redis`` (partagé).
+    # Une panne Redis replie automatiquement sur le cache mémoire.
+    cache_backend: Literal["memory", "redis"] = "memory"
+    cache_redis_url: str = "redis://localhost:6379/0"
+
     # Intégration GitHub.
     # ``demo`` n'exige aucun token : des données fictives sont servies.
     # ``github`` nécessite un token et interroge l'API GitHub réelle.
@@ -61,6 +66,18 @@ class Settings(BaseSettings):
     github_per_page: int = Field(default=100, ge=1, le=100)
     github_max_pages: int = Field(default=10, ge=1, le=100)
 
+    # GitHub App (prioritaire sur le token personnel si configurée).
+    # Le jeton d'installation est échangé automatiquement (quota 15 000/h).
+    # La clé privée peut être fournie en PEM (``\n`` échappés acceptés) ou en
+    # base64 dans ``REPOFLOW_GITHUB_APP_PRIVATE_KEY``.
+    github_app_id: str | None = None
+    github_app_private_key: SecretStr | None = None
+    github_app_installation_id: int | None = None
+
+    # Transport GraphQL pour la liste des pull requests (1 requête par page
+    # au lieu de 4-5 par pull request en REST).
+    github_use_graphql: bool = False
+
     # La fusion automatique est désactivée par défaut et ne doit pas être
     # activée tant que les garde-fous serveur ne sont pas en place.
     auto_merge_enabled_globally: bool = False
@@ -70,10 +87,24 @@ class Settings(BaseSettings):
     worker_enabled: bool = False
     worker_interval_seconds: int = Field(default=300, ge=1)
 
+    # Rétention du journal d'audit, en jours (0 = illimitée).
+    # La purge s'exécute à chaque passe du worker.
+    audit_retention_days: int = Field(default=0, ge=0)
+
     # Observabilité.
     # Identifiant de corrélation et journal d'accès : toujours actifs.
     # Exposition des métriques (``/api/metrics``).
     metrics_enabled: bool = True
+
+    # Authentification : jeton porteur partagé (vide = authentification
+    # désactivée, adapté au développement et au mode démonstration). Lorsqu'il
+    # est défini, les routes de l'API v1 exigent ``Authorization: Bearer``.
+    api_token: SecretStr | None = None
+    # Préfixes d'URL protégés par le jeton (sondes et métriques restent
+    # accessibles aux orchestrateurs sans authentification).
+    auth_protected_prefixes: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["/api/v1"]
+    )
 
     # Durcissement sécurité.
     security_headers_enabled: bool = True
@@ -84,10 +115,13 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_requests: int = Field(default=120, ge=1)
     rate_limit_window_seconds: int = Field(default=60, ge=1)
+    # Backend du limiteur : "memory" (par instance) ou "redis" (partagé,
+    # repli automatique sur mémoire en cas de panne).
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
 
-    @field_validator("cors_origins", mode="before")
+    @field_validator("cors_origins", "auth_protected_prefixes", mode="before")
     @classmethod
-    def _split_origins(cls, value: object) -> object:
+    def _split_list(cls, value: object) -> object:
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
@@ -95,6 +129,12 @@ class Settings(BaseSettings):
     @property
     def is_demo(self) -> bool:
         return self.github_provider == "demo"
+
+    @property
+    def auth_enabled(self) -> bool:
+        """Vrai lorsqu'un jeton d'accès est configuré."""
+        token = self.api_token
+        return bool(token is not None and token.get_secret_value())
 
 
 @lru_cache

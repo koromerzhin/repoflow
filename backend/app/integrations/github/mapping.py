@@ -220,10 +220,33 @@ def map_issue(
         author=str((data.get("user") or {}).get("login") or ""),
         state=state,
         is_pull_request=is_pull_request,
+        labels=_label_names(data.get("labels")),
+        assignees=_assignee_logins(data.get("assignees")),
+        milestone=str((data.get("milestone") or {}).get("title") or "") or None,
         created_at=parse_datetime(data.get("created_at")),
         updated_at=parse_datetime(data.get("updated_at")),
         html_url=str(data.get("html_url") or ""),
     )
+
+
+def _label_names(raw: Any) -> list[str]:
+    """Extrait les noms de libellés (l'API peut renvoyer des chaînes)."""
+    if not isinstance(raw, list):
+        return []
+    names: list[str] = []
+    for item in raw:
+        if isinstance(item, dict) and item.get("name"):
+            names.append(str(item["name"]))
+        elif isinstance(item, str) and item:
+            names.append(item)
+    return names
+
+
+def _assignee_logins(raw: Any) -> list[str]:
+    """Extrait les logins des assignés."""
+    if not isinstance(raw, list):
+        return []
+    return [str(item.get("login")) for item in raw if isinstance(item, dict) and item.get("login")]
 
 
 # États de revue GitHub vers notre modèle.

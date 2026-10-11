@@ -38,10 +38,11 @@ fait dans `app/integrations/github/factory.py`.
 
 ## Authentification
 
-Le fournisseur `github` attend un jeton **côté serveur** dans
-`REPOFLOW_GITHUB_TOKEN`. Il est envoyé en en-tête
-`Authorization: Bearer <token>` et ne figure jamais dans une URL, une réponse
-d'API ou un log. Les requêtes utilisent également :
+Le fournisseur `github` attend un jeton **côté serveur**, soit un token
+personnel dans `REPOFLOW_GITHUB_TOKEN`, soit — **recommandé** — une GitHub
+App configurée via `REPOFLOW_GITHUB_APP_*` (voir ci-dessous). Le jeton est
+envoyé en en-tête `Authorization: Bearer <token>` et ne figure jamais dans
+une URL, une réponse d'API ou un log. Les requêtes utilisent également :
 
 - `Accept: application/vnd.github+json`
 - `X-GitHub-Api-Version: 2022-11-28`
@@ -51,14 +52,28 @@ d'API ou un log. Les requêtes utilisent également :
 
 | Option | Avantages | Inconvénients | Candidat |
 | --- | --- | --- | --- |
-| **GitHub App** | Permissions fines par installation, jetons d'installation à durée limitée, webhooks, idéal multi-dépôts. | Mise en place plus lourde (clé privée, installation). | **Recommandé** |
+| **GitHub App** | Permissions fines par installation, jetons d'installation à durée limitée, webhooks, quota 15 000 req/h, idéal multi-dépôts. | Mise en place plus lourde (clé privée, installation). | **Recommandé** |
 | **OAuth App + token utilisateur** | Simple à démarrer, agit au nom de l'utilisateur. | Portée large, liée à l'utilisateur, révocation manuelle. | Acceptable pour le développement |
-| **Personal Access Token (fine-grained)** | Très simple. | Manuel, lié à une personne, rotation à organiser. | Développement / auto-hébergement |
+| **Personal Access Token (fine-grained)** | Très simple. | Manuel, lié à une personne, rotation à organiser, quota 5 000 req/h. | Développement / auto-hébergement |
 
-> Note : le fournisseur actuel consomme directement un jeton (PAT ou jeton
-> d'installation GitHub App). L'échange de clé privée → jeton d'installation
-> (et l'usage de `/installation/repositories`) fera l'objet d'une étape
-> ultérieure.
+### GitHub App : jeton d'installation
+
+Implémenté dans `app/integrations/github/app_auth.py` (`InstallationTokenProvider`) :
+
+1. un **JWT RS256** (durée 10 min, `iss` = identifiant d'application) est
+   signé avec la clé privée (`REPOFLOW_GITHUB_APP_PRIVATE_KEY`, PEM brut avec
+   `\n` échappés acceptés, ou PEM encodé en base64) ;
+2. le JWT est échangé contre un **jeton d'installation** via
+   `POST /app/installations/{REPOFLOW_GITHUB_APP_INSTALLATION_ID}/access_tokens` ;
+3. le jeton (durée de vie 1 h) est mis en cache et **renouvelé
+   automatiquement** 5 min avant son expiration ;
+4. toutes les requêtes du client (`GitHubClient`) portent ce jeton via le
+   `token_provider` — lecture comme fusion autorisée.
+
+Les trois variables `REPOFLOW_GITHUB_APP_ID`, `REPOFLOW_GITHUB_APP_PRIVATE_KEY`
+et `REPOFLOW_GITHUB_APP_INSTALLATION_ID` doivent être définies ensemble ; la
+GitHub App est alors prioritaire sur `REPOFLOW_GITHUB_TOKEN`. La clé privée ne
+quitte jamais le serveur et n'est jamais journalisée.
 
 ### Permissions minimales à viser
 
@@ -96,14 +111,31 @@ Le principe du **moindre privilège** doit s'appliquer :
   La taille de page est bornée à 100 (`REPOFLOW_GITHUB_PER_PAGE`).
   Certaines réponses sont enveloppées (ex. `check_runs`) ; le client extrait
   alors la liste via une clé dédiée.
-- **Limites de requêtes (rate limits)** : détection via
-  `X-RateLimit-Remaining` ; une limite atteinte lève `GitHubRateLimitError`
-  (HTTP 503 côté RepoFlow) en exposant `X-RateLimit-Reset`. Le client interrompt
-  aussi la pagination si la page suivante serait impossible.
+- **Transport GraphQL** (`REPOFLOW_GITHUB_USE_GRAPHQL=true`,
+  `app/integrations/github/graphql.py`) : la liste des pull requests d'un
+  dépôt est ramenée par **une seule requête GraphQL** (PR + checks CI via
+  `statusCheckRollup` + revues + statistiques de diff), au lieu de 4-5
+  requêtes REST par pull request. Le détail d'une PR, les issues et la
+  fusion restent en REST. Les nœuds GraphQL sont convertis au format REST
+  pour réutiliser le mapping existant.
+- **Limites de requêtes (rate limits)** : plusieurs mécanismes réduisent la
+  consommation :
+  - **Requêtes conditionnelles** : chaque GET paginé ou non envoie
+    `If-None-Match` (``ETag``) ; une réponse `304` (ressource inchangée) ne
+    consomme pas la limite GitHub et renvoie le corps en cache ;
+  - **Chargements coalescés** : les requêtes concurrentes pour une même
+    ressource partagent un unique chargement fournisseur (*single-flight*) ;
+  - **Cache TTL** mémoire (`REPOFLOW_CACHE_TTL_SECONDS`) côté services.
+  Une limite primaire atteinte (`X-RateLimit-Remaining: 0`) lève
+  `GitHubRateLimitError` (HTTP 503 côté RepoFlow) en exposant
+  `X-RateLimit-Reset`. Une limite secondaire (`403`/`429` avec en-tête
+  `Retry-After`) déclenche une seule nouvelle tentative après le délai
+  indiqué (plafonné à 5 s). Le client interrompt aussi la pagination si la
+  page suivante serait impossible.
 - **Erreurs normalisées** (`app/integrations/github/errors.py`) :
   `401` → `GitHubAuthError`, `403` (hors rate limit) → `GitHubPermissionError`,
-  `403/429` avec rate limit → `GitHubRateLimitError`, `404` → `NotFoundError`,
-  `5xx` → `ProviderError`.
+  `403/429` avec rate limit → `GitHubRateLimitError`, `429` (seuil atteint) →
+  `GitHubRateLimitError`, `404` → `NotFoundError`, `5xx` → `ProviderError`.
 - **Délai d'attente** : `REPOFLOW_GITHUB_TIMEOUT` (secondes) s'applique à
   chaque requête HTTP.
 

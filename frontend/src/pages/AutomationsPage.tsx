@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/PageHeader'
 import { useAsync } from '@/hooks/useAsync'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { formatDateTime } from '@/lib/status'
 import {
   ApiError,
@@ -21,6 +23,8 @@ import {
 import type { AutomationRule, RepositoryConfig } from '@/types/api'
 
 export function AutomationsPage() {
+  const { t } = useTranslation()
+  useDocumentTitle(t('automations.title'))
   const configs = useAsync((signal) => listRepositoryConfigs(signal), [])
   const status = useAsync((signal) => getAutomationStatus(signal), [])
 
@@ -38,7 +42,7 @@ export function AutomationsPage() {
       configs.reload()
       status.reload()
     } catch (cause) {
-      setActionError(cause instanceof ApiError ? cause.message : 'Une erreur est survenue.')
+      setActionError(cause instanceof ApiError ? cause.message : t('automations.actionError'))
     } finally {
       setBusy(false)
     }
@@ -63,8 +67,8 @@ export function AutomationsPage() {
   return (
     <div>
       <PageHeader
-        title="Automatisations"
-        description="Règles de fusion par dépôt et par branche. La fusion reste désactivée tant qu'elle n'est pas explicitement autorisée."
+        title={t('automations.title')}
+        description={t('automations.description')}
       />
 
       {actionError ? (
@@ -77,7 +81,7 @@ export function AutomationsPage() {
       ) : null}
 
       <section className="mb-8 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-        <h2 className="text-base font-semibold text-slate-100">Garde-fous</h2>
+        <h2 className="text-base font-semibold text-slate-100">{t('automations.safeguards')}</h2>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Badge
             className={
@@ -86,7 +90,10 @@ export function AutomationsPage() {
                 : 'bg-slate-500/15 text-slate-300 ring-slate-500/30'
             }
           >
-            Fusion globale&nbsp;: {status.data?.global_auto_merge_enabled ? 'activée' : 'désactivée'}
+            {t('automations.globalMerge')}{' '}
+            {status.data?.global_auto_merge_enabled
+              ? t('automations.enabled')
+              : t('automations.disabled')}
           </Badge>
           <Badge
             className={
@@ -95,7 +102,8 @@ export function AutomationsPage() {
                 : 'bg-slate-500/15 text-slate-300 ring-slate-500/30'
             }
           >
-            Worker&nbsp;: {status.data?.worker_enabled ? 'actif' : 'inactif'}
+            {t('automations.worker')}{' '}
+            {status.data?.worker_enabled ? t('automations.active') : t('automations.inactive')}
           </Badge>
           <button
             type="button"
@@ -107,22 +115,22 @@ export function AutomationsPage() {
                 : 'rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-red-700 hover:text-red-200 disabled:opacity-50'
             }
           >
-            {killSwitchEngaged ? 'Désengager l’arrêt d’urgence' : 'Engager l’arrêt d’urgence'}
+            {killSwitchEngaged ? t('automations.disengage') : t('automations.engage')}
           </button>
         </div>
         {killSwitchEngaged ? (
-          <p className="mt-3 text-sm text-red-300">
-            Arrêt d’urgence engagé : aucune fusion automatique n’est possible.
-          </p>
+          <p className="mt-3 text-sm text-red-300">{t('automations.killSwitchActive')}</p>
         ) : null}
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-3 text-base font-semibold text-slate-100">Dépôts suivis</h2>
+        <h2 className="mb-3 text-base font-semibold text-slate-100">
+          {t('automations.trackedRepos')}
+        </h2>
 
         <form onSubmit={handleAddRepository} className="mb-4 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-sm text-slate-400">
-            <span>Dépôt (owner/name)</span>
+            <span>{t('automations.repoLabel')}</span>
             <input
               type="text"
               value={newFullName}
@@ -132,7 +140,7 @@ export function AutomationsPage() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-400">
-            <span>Branche par défaut</span>
+            <span>{t('automations.defaultBranch')}</span>
             <input
               type="text"
               value={newBranch}
@@ -146,7 +154,7 @@ export function AutomationsPage() {
             className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
           >
             <Plus className="size-4" aria-hidden />
-            Ajouter
+            {t('automations.add')}
           </button>
         </form>
 
@@ -154,7 +162,7 @@ export function AutomationsPage() {
           loading={configs.loading}
           error={configs.error}
           isEmpty={configs.data?.items.length === 0}
-          emptyMessage="Aucun dépôt suivi pour le moment."
+          emptyMessage={t('automations.empty')}
           onRetry={configs.reload}
         >
           <ul className="space-y-4">
@@ -215,6 +223,7 @@ function RepositoryConfigCard({
   onToggleRule,
   onDeleteRule,
 }: RepositoryConfigCardProps) {
+  const { t } = useTranslation()
   const [ruleName, setRuleName] = useState('')
   const [branchPattern, setBranchPattern] = useState(config.default_branch)
   const [autoMerge, setAutoMerge] = useState(false)
@@ -246,8 +255,8 @@ function RepositoryConfigCard({
         <div>
           <h3 className="text-base font-semibold text-slate-100">{config.full_name}</h3>
           <p className="mt-1 text-sm text-slate-400">
-            Branche par défaut&nbsp;: {config.default_branch} · Ajouté le{' '}
-            {formatDateTime(config.created_at)}
+            {t('automations.config.defaultBranch')} {config.default_branch} ·{' '}
+            {t('automations.config.addedOn', { date: formatDateTime(config.created_at) })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -258,7 +267,7 @@ function RepositoryConfigCard({
                 : 'bg-slate-500/15 text-slate-300 ring-slate-500/30'
             }
           >
-            {config.enabled ? 'Actif' : 'Suspendu'}
+            {config.enabled ? t('automations.config.enabled') : t('automations.config.suspended')}
           </Badge>
           <button
             type="button"
@@ -266,25 +275,25 @@ function RepositoryConfigCard({
             onClick={onToggleEnabled}
             className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
           >
-            {config.enabled ? 'Suspendre' : 'Activer'}
+            {config.enabled ? t('automations.config.suspend') : t('automations.config.activate')}
           </button>
           <button
             type="button"
             disabled={busy}
             onClick={onDelete}
-            aria-label={`Supprimer ${config.full_name}`}
+            aria-label={t('automations.config.deleteAria', { name: config.full_name })}
             className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-red-700 hover:text-red-200 disabled:opacity-50"
           >
             <Trash2 className="size-4" aria-hidden />
-            Supprimer
+            {t('automations.config.delete')}
           </button>
         </div>
       </div>
 
       <div className="mt-4 border-t border-slate-800 pt-4">
-        <h4 className="text-sm font-semibold text-slate-200">Règles</h4>
+        <h4 className="text-sm font-semibold text-slate-200">{t('automations.config.rules')}</h4>
         {config.rules.length === 0 ? (
-          <p className="mt-2 text-sm text-slate-500">Aucune règle définie.</p>
+          <p className="mt-2 text-sm text-slate-500">{t('automations.config.noRules')}</p>
         ) : (
           <ul className="mt-2 space-y-2">
             {config.rules.map((rule) => (
@@ -295,8 +304,13 @@ function RepositoryConfigCard({
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-100">{rule.name}</p>
                   <p className="text-xs text-slate-400">
-                    Motif&nbsp;: <code>{rule.branch_pattern}</code> · {rule.required_approvals}{' '}
-                    approbation(s) · checks exigés&nbsp;: {rule.require_green_checks ? 'oui' : 'non'}
+                    {t('automations.config.branchPattern')} <code>{rule.branch_pattern}</code> ·{' '}
+                    {t('automations.config.approvals', { count: rule.required_approvals })} ·{' '}
+                    {t('automations.config.checksRequired', {
+                      value: rule.require_green_checks
+                        ? t('common.yes')
+                        : t('common.no'),
+                    })}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -307,7 +321,9 @@ function RepositoryConfigCard({
                         : 'bg-slate-500/15 text-slate-300 ring-slate-500/30'
                     }
                   >
-                    {rule.auto_merge_enabled ? 'Fusion auto' : 'Fusion manuelle'}
+                    {rule.auto_merge_enabled
+                      ? t('automations.config.autoMerge')
+                      : t('automations.config.manualMerge')}
                   </Badge>
                   <button
                     type="button"
@@ -315,13 +331,15 @@ function RepositoryConfigCard({
                     onClick={() => onToggleRule(rule)}
                     className="rounded-md border border-slate-700 bg-slate-900 px-2.5 py-1 text-xs text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
                   >
-                    {rule.auto_merge_enabled ? 'Désactiver' : 'Activer'}
+                    {rule.auto_merge_enabled
+                      ? t('automations.config.disable')
+                      : t('automations.config.activate')}
                   </button>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => onDeleteRule(rule)}
-                    aria-label={`Supprimer la règle ${rule.name}`}
+                    aria-label={t('automations.config.deleteRuleAria', { name: rule.name })}
                     className="inline-flex items-center rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-200 transition hover:border-red-700 hover:text-red-200 disabled:opacity-50"
                   >
                     <Trash2 className="size-3.5" aria-hidden />
@@ -334,17 +352,17 @@ function RepositoryConfigCard({
 
         <form onSubmit={handleAddRule} className="mt-3 flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-slate-400">
-            <span>Nom</span>
+            <span>{t('automations.rule.name')}</span>
             <input
               type="text"
               value={ruleName}
               onChange={(event) => setRuleName(event.target.value)}
-              placeholder="Fusion vers main"
+              placeholder={t('automations.rule.namePlaceholder')}
               className="w-44 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-slate-400">
-            <span>Motif de branche</span>
+            <span>{t('automations.rule.pattern')}</span>
             <input
               type="text"
               value={branchPattern}
@@ -353,7 +371,7 @@ function RepositoryConfigCard({
             />
           </label>
           <label className="flex flex-col gap-1 text-xs text-slate-400">
-            <span>Approbations</span>
+            <span>{t('automations.rule.approvals')}</span>
             <input
               type="number"
               min={0}
@@ -369,7 +387,7 @@ function RepositoryConfigCard({
               checked={requireGreenChecks}
               onChange={(event) => setRequireGreenChecks(event.target.checked)}
             />
-            Checks exigés
+            {t('automations.rule.requireChecks')}
           </label>
           <label className="flex items-center gap-2 text-xs text-slate-300">
             <input
@@ -377,7 +395,7 @@ function RepositoryConfigCard({
               checked={autoMerge}
               onChange={(event) => setAutoMerge(event.target.checked)}
             />
-            Fusion auto
+            {t('automations.rule.autoMerge')}
           </label>
           <button
             type="submit"
@@ -385,7 +403,7 @@ function RepositoryConfigCard({
             className="inline-flex items-center gap-2 rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-200 transition hover:border-sky-600 hover:text-sky-300 disabled:opacity-50"
           >
             <Plus className="size-4" aria-hidden />
-            Ajouter la règle
+            {t('automations.rule.add')}
           </button>
         </form>
       </div>

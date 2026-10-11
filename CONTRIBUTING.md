@@ -45,10 +45,11 @@ npm run build
 
 - **Backend** : Python typé (`from __future__ import annotations`), Ruff comme
   source de vérité, aucun commentaire superflu. Interfaces et messages en
-  **français**.
+  **français** (et **anglais** via `Accept-Language`).
 - **Frontend** : TypeScript strict, alias `@/`, composants fonctionnels,
-  interface en **français**, tests Testing Library, pas de dépendance à un
-  vrai serveur.
+  interface **bilingue** via `src/i18n/` (locales `fr` et `en` — tout libellé
+  passe par une clé de traduction), tests Testing Library, pas de dépendance à
+  un vrai serveur.
 - Les réponses API sont typées par des schémas Pydantic explicites ; les types
   TypeScript leur correspondent dans `src/types/api.ts`.
 - Les données de démonstration sont toujours identifiables

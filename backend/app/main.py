@@ -17,9 +17,10 @@ from app.core.logging import configure_logging, get_logger
 from app.core.metrics import MetricsMiddleware
 from app.core.request_context import RequestContextMiddleware
 from app.core.security import (
-    RateLimiter,
+    AuthMiddleware,
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
+    build_rate_limiter,
 )
 from app.db.init_db import create_all
 from app.integrations.github.factory import get_provider
@@ -82,7 +83,8 @@ def create_app() -> FastAPI:
         app.add_middleware(
             RateLimitMiddleware,
             enabled=True,
-            limiter=RateLimiter(
+            limiter=build_rate_limiter(
+                backend=settings.rate_limit_backend,
                 requests=settings.rate_limit_requests,
                 window_seconds=settings.rate_limit_window_seconds,
             ),
@@ -93,12 +95,19 @@ def create_app() -> FastAPI:
             SecurityHeadersMiddleware,
             secure_request=lambda _: settings.hsts_enabled or settings.environment == "production",
         )
-    # 3. Métriques d'observation.
+    # 3. Authentification par jeton porteur (routes de l'API v1).
+    if settings.auth_enabled and settings.api_token is not None:
+        app.add_middleware(
+            AuthMiddleware,
+            token=settings.api_token.get_secret_value(),
+            protected_prefixes=tuple(settings.auth_protected_prefixes),
+        )
+    # 4. Métriques d'observation.
     if settings.metrics_enabled:
         app.add_middleware(MetricsMiddleware)
-    # 4. Contexte de requête : identifiant de corrélation + journal d'accès.
+    # 5. Contexte de requête : identifiant de corrélation + journal d'accès.
     app.add_middleware(RequestContextMiddleware)
-    # 5. CORS (le plus externe : toute réponse, y compris les erreurs, reçoit
+    # 6. CORS (le plus externe : toute réponse, y compris les erreurs, reçoit
     #    les en-têtes CORS).
     app.add_middleware(
         CORSMiddleware,

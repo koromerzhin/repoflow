@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from app.core.errors import NotFoundError, ProviderError
+from app.integrations.github import ratelimit
 from app.integrations.github.client import GitHubClient, parse_next_link
 from app.integrations.github.errors import (
     GitHubAuthError,
@@ -189,3 +190,213 @@ async def test_rate_limit_bloque_page_suivante() -> None:
             await client.get_paginated("/user/repos")
     finally:
         await client.aclose()
+
+
+async def test_requete_conditionnelle_etag_304_renvoie_cache() -> None:
+    requests: list[httpx.Request] = []
+    body = [{"id": 1}]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "if-none-match" in request.headers:
+            return httpx.Response(304)
+        return httpx.Response(200, json=body, headers={"ETag": 'W/"abc123"'})
+
+    client = make_client(handler)
+    try:
+        first = await client.get("/user/repos")
+        second = await client.get("/user/repos")
+    finally:
+        await client.aclose()
+
+    assert first == body
+    assert second == body
+    assert len(requests) == 2
+    assert requests[1].headers["if-none-match"] == 'W/"abc123"'
+
+
+async def test_etag_invalide_200_met_a_jour_cache() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"v": 1}, headers={"ETag": 'W/"a"'})
+        if "if-none-match" in request.headers:
+            return httpx.Response(200, json={"v": 2}, headers={"ETag": 'W/"b"'})
+        return httpx.Response(200, json={"v": 2})
+
+    client = make_client(handler)
+    try:
+        first = await client.get("/user")
+        second = await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert first == {"v": 1}
+    assert second == {"v": 2}
+
+
+async def test_pagination_304_suit_le_lien_en_cache() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        page = request.url.params.get("page")
+        if "if-none-match" in request.headers:
+            return httpx.Response(304)
+        if page == "1":
+            return httpx.Response(
+                200,
+                json=[{"id": 1}],
+                headers={
+                    "ETag": 'W/"p1"',
+                    "Link": '<https://api.github.com/x?page=2>; rel="next"',
+                },
+            )
+        return httpx.Response(200, json=[{"id": 2}], headers={"ETag": 'W/"p2"'})
+
+    client = make_client(handler)
+    try:
+        first = await client.get_paginated("/x")
+        second = await client.get_paginated("/x")
+    finally:
+        await client.aclose()
+
+    assert [item["id"] for item in first] == [1, 2]
+    assert [item["id"] for item in second] == [1, 2]
+    page1_second = [r for r in requests[3:] if r.url.params.get("page") == "1"]
+    assert all("if-none-match" in r.headers for r in page1_second)
+
+
+async def test_limite_secondaire_retry_after_reessaie_une_fois() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(
+                403,
+                json={"message": "secondary rate limit"},
+                headers={"Retry-After": "0"},
+            )
+        return httpx.Response(200, json={"ok": True})
+
+    client = make_client(handler)
+    try:
+        payload = await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert payload == {"ok": True}
+    assert len(calls) == 2
+
+
+async def test_limite_secondaire_plafonnee_et_erreur_si_persistante() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(
+            429,
+            json={"message": "secondary rate limit"},
+            headers={"Retry-After": "9999"},
+        )
+
+    client = make_client(handler, max_retry_after=0.01)
+    try:
+        with pytest.raises(GitHubRateLimitError):
+            await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert len(calls) == 2
+
+
+async def test_rate_limit_primaire_sans_retry_after_n_eessaie_pas() -> None:
+    calls: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(
+            403,
+            json={"message": "API rate limit exceeded"},
+            headers={"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1700000000"},
+        )
+
+    client = make_client(handler)
+    try:
+        with pytest.raises(GitHubRateLimitError):
+            await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert len(calls) == 1
+
+
+async def test_quota_enregistre_apres_reponse() -> None:
+    ratelimit.reset()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"ok": True},
+            headers={
+                "x-ratelimit-remaining": "4998",
+                "x-ratelimit-limit": "5000",
+                "x-ratelimit-reset": "1700000000",
+            },
+        )
+
+    client = make_client(handler)
+    try:
+        await client.get("/user")
+        snapshot = ratelimit.snapshot()
+    finally:
+        await client.aclose()
+        ratelimit.reset()
+
+    assert snapshot == {"remaining": 4998, "limit": 5000, "reset_at": 1700000000}
+
+
+async def test_quota_non_renseigne_sans_entetes() -> None:
+    ratelimit.reset()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True})
+
+    client = make_client(handler)
+    try:
+        await client.get("/user")
+        snapshot = ratelimit.snapshot()
+    finally:
+        await client.aclose()
+
+    assert snapshot == {"remaining": None, "limit": None, "reset_at": None}
+
+
+async def test_token_provider_autorise_chaque_requete() -> None:
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(request.headers.get("authorization", ""))
+        return httpx.Response(200, json={"ok": True})
+
+    tokens = iter(["ghs_token_1", "ghs_token_2"])
+
+    async def provider() -> str:
+        return next(tokens)
+
+    client = GitHubClient(
+        None,
+        "https://api.github.com",
+        transport=httpx.MockTransport(handler),
+        token_provider=provider,
+    )
+    try:
+        await client.get("/user")
+        await client.get("/user")
+    finally:
+        await client.aclose()
+
+    assert captured == ["Bearer ghs_token_1", "Bearer ghs_token_2"]

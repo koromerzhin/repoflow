@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -26,8 +27,21 @@ const repositories: RepositoryListResponse = {
       html_url: 'https://github.com/acme/web-app',
       is_demo: true,
     },
+    {
+      id: 'repo-2',
+      owner: 'acme',
+      name: 'api-gateway',
+      full_name: 'acme/api-gateway',
+      default_branch: 'main',
+      private: true,
+      open_issues_count: 2,
+      open_pull_requests_count: 0,
+      last_updated: '2026-01-01T11:00:00Z',
+      html_url: 'https://github.com/acme/api-gateway',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
 }
 
@@ -41,14 +55,34 @@ const issues: IssueListResponse = {
       author: 'lea.b',
       state: 'open',
       is_pull_request: false,
+      labels: ['bug', 'authentification'],
+      assignees: ['lea.b'],
+      milestone: 'Sprint 12',
       created_at: '2026-01-01T08:00:00Z',
       updated_at: '2026-01-02T08:00:00Z',
       html_url: 'https://github.com/acme/web-app/issues/201',
       is_demo: true,
     },
+    {
+      id: 'issue-2',
+      number: 53,
+      repository_full_name: 'acme/api-gateway',
+      title: 'Échecs intermittents sur le endpoint /metrics',
+      author: 'sami.h',
+      state: 'open',
+      is_pull_request: false,
+      labels: ['bug', 'observabilité'],
+      assignees: ['sami.h'],
+      milestone: 'Sprint 13',
+      created_at: '2026-01-01T09:00:00Z',
+      updated_at: '2026-01-02T09:00:00Z',
+      html_url: 'https://github.com/acme/api-gateway/issues/53',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
+  next_cursor: null,
 }
 
 function renderPage() {
@@ -72,19 +106,100 @@ describe('IssuesPage', () => {
       ).toBeInTheDocument(),
     )
     expect(screen.getByText('#201')).toBeInTheDocument()
-    expect(screen.getByText('Ouverte')).toBeInTheDocument()
+    expect(screen.getAllByText('Ouverte')).toHaveLength(2)
     expect(getIssues).toHaveBeenCalled()
   })
 
   it('affiche un état vide quand aucune issue ne correspond', async () => {
     vi.mocked(getRepositories).mockResolvedValue(repositories)
-    vi.mocked(getIssues).mockResolvedValue({ items: [], total: 0, data_source: 'demo' })
+    vi.mocked(getIssues).mockResolvedValue({ items: [], total: 0, data_source: 'demo', next_cursor: null })
 
     renderPage()
 
     await waitFor(() =>
       expect(screen.getByText('Aucune issue à afficher pour ce filtre.')).toBeInTheDocument(),
     )
+  })
+
+  it('filtre les issues par recherche texte côté serveur', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'réinitialisation')
+
+    await waitFor(() => {
+      expect(getIssues).toHaveBeenLastCalledWith(
+        { state: 'open', search: 'réinitialisation', offset: 0, refresh: false },
+        expect.anything(),
+      )
+    })
+  })
+
+  it('filtre les issues par libellé et assigné', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('bug').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('authentification').length).toBeGreaterThan(0)
+    expect(screen.getByText(/@lea\.b/)).toBeInTheDocument()
+    expect(screen.getAllByText(/Sprint 12/).length).toBeGreaterThan(0)
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Libellé' }), 'observabilité')
+    await waitFor(() => {
+      expect(screen.getByText('Échecs intermittents sur le endpoint /metrics')).toBeInTheDocument()
+      expect(
+        screen.queryByText('Le lien de réinitialisation expire trop vite'),
+      ).not.toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Libellé' }), '')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Assigné' }), 'lea.b')
+    await waitFor(() => {
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByText('Échecs intermittents sur le endpoint /metrics'),
+      ).not.toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Jalon' }), 'Sprint 13')
+    await waitFor(() => {
+      expect(
+        screen.getByText('Aucune issue ne correspond à cette recherche.'),
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('affiche la visibilité du dépôt sur les cartes', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getIssues).mockResolvedValue(issues)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0)
   })
 
   it('affiche une erreur exploitable', async () => {
@@ -95,5 +210,49 @@ describe('IssuesPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
+  })
+
+  it('charge la page suivante via « Charger plus »', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: IssueListResponse = {
+      items: [
+        {
+          ...issues.items[0],
+          id: 'issue-3',
+          number: 202,
+          title: 'Nouvelle issue paginée',
+        },
+      ],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getIssues)
+      .mockResolvedValueOnce({ ...issues, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Nouvelle issue paginée')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Nouvelle issue paginée')).toBeInTheDocument(),
+    )
+    expect(
+      screen.getByText('Le lien de réinitialisation expire trop vite'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Charger plus' })).not.toBeInTheDocument()
+    expect(getIssues).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+      expect.anything(),
+    )
   })
 })

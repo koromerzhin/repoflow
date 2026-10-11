@@ -1,73 +1,141 @@
 import { Link } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
+import { AutoRefreshSelect } from '@/components/AutoRefreshSelect'
 import { Badge } from '@/components/Badge'
+import { FilterBar } from '@/components/FilterBar'
 import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
+import { RepositoryCombobox } from '@/components/RepositoryCombobox'
+import { SearchField } from '@/components/SearchField'
+import { VisibilityBadge } from '@/components/VisibilityBadge'
+import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useDocumentTitle } from '@/hooks/useDocumentTitle'
+import { useUrlState } from '@/hooks/useUrlState'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { getPullRequests, getRepositories } from '@/services/apiClient'
+import type { PullRequest } from '@/types/api'
+
+interface Page {
+  offset: number
+  items: PullRequest[]
+}
 
 export function PullRequestsPage() {
-  const [repository, setRepository] = useState('')
+  const { t } = useTranslation()
+  useDocumentTitle(t('pr.title'))
+  const [repository, setRepository] = useUrlState('repository', '')
+  const [query, setQuery] = useUrlState('q', '')
+  const [autoSeconds, setAutoSeconds] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [pages, setPages] = useState<Page[]>([])
 
   const repositories = useAsync(getRepositories, [])
   const pullRequests = useResource(
     (options, signal) =>
       getPullRequests(
-        { repository: repository || undefined, refresh: options.refresh },
+        {
+          repository: repository || undefined,
+          search: query || undefined,
+          offset,
+          refresh: options.refresh,
+        },
         signal,
       ),
-    [repository],
+    [repository, query, offset],
+  )
+  useAutoRefresh(pullRequests.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
+
+  const response = pullRequests.data
+
+  useEffect(() => {
+    if (!response) {
+      return
+    }
+    /* eslint-disable react-hooks/set-state-in-effect -- accumulation des
+       pages : la réponse courante remplace la page à son offset. */
+    setPages((current) => {
+      const others = current.filter((page) => page.offset !== offset)
+      return [...others, { offset, items: response.items }].sort((a, b) => a.offset - b.offset)
+    })
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [response, offset])
+
+  const items = useMemo(() => pages.flatMap((page) => page.items), [pages])
+  const nextCursor = response?.next_cursor ?? null
+
+  function changeFilter(queryValue: string, repositoryValue: string) {
+    let changed = false
+    if (queryValue !== query) {
+      setQuery(queryValue)
+      changed = true
+    }
+    if (repositoryValue !== repository) {
+      setRepository(repositoryValue)
+      changed = true
+    }
+    if (!changed) {
+      return
+    }
+    setPages([])
+    setOffset(0)
+  }
+
+  const searching = query.trim().length > 0
+  const visibility = useMemo(
+    () =>
+      new Map(
+        (repositories.data?.items ?? []).map((item) => [item.full_name, item.private]),
+      ),
+    [repositories.data],
   )
 
   const announcement = pullRequests.data
-    ? `${pullRequests.data.total} pull request(s) affichée(s)${
-        repository ? ` pour ${repository}` : ''
-      }.`
+    ? t(repository ? 'pr.announcementFor' : 'pr.announcement', {
+        total: pullRequests.data.total,
+        repository,
+      })
     : ''
 
   return (
     <div>
-      <PageHeader
-        title="Pull requests"
-        description="Pull requests ouvertes, état des checks CI et évaluation indicative des conditions de fusion."
-        actions={
-          <div className="flex items-center gap-3">
-            <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
-            <label className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="hidden sm:inline">Dépôt</span>
-              <select
-                value={repository}
-                onChange={(event) => setRepository(event.target.value)}
-                className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
-              >
-                <option value="">Tous les dépôts</option>
-                {repositories.data?.items.map((item) => (
-                  <option key={item.id} value={item.full_name}>
-                    {item.full_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        }
-      />
+      <PageHeader title={t('pr.title')} description={t('pr.description')} />
+
+      <FilterBar>
+        <SearchField
+          label={t('filter.search')}
+          placeholder={t('filter.searchPlaceholder')}
+          value={query}
+          onChange={(value) => changeFilter(value, repository)}
+        />
+        <RepositoryCombobox
+          label={t('pr.filterRepository')}
+          repositories={repositories.data?.items ?? []}
+          value={repository}
+          onChange={(value) => changeFilter(query, value)}
+        />
+        <div className="ml-auto flex items-center gap-2">
+          <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
+          <RefreshButton onClick={pullRequests.refresh} loading={pullRequests.loading} />
+        </div>
+      </FilterBar>
 
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
 
       <AsyncState
-        loading={pullRequests.loading}
+        loading={pullRequests.loading && items.length === 0}
         error={pullRequests.error}
-        isEmpty={pullRequests.data?.items.length === 0}
-        emptyMessage="Aucune pull request à afficher pour ce filtre."
+        isEmpty={pullRequests.data !== undefined && items.length === 0}
+        emptyMessage={searching ? t('pr.noMatch') : t('pr.empty')}
         onRetry={pullRequests.reload}
       >
         <div className="space-y-4">
-          {pullRequests.data?.items.map((pr) => (
+          {items.map((pr) => (
             <article
               key={pr.id}
               className="rounded-xl border border-slate-800 bg-slate-900/40 p-5"
@@ -87,8 +155,10 @@ export function PullRequestsPage() {
                       </Link>
                     </h2>
                   </div>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {pr.repository_full_name} · {pr.author}
+                  <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                    {pr.repository_full_name}
+                    <VisibilityBadge isPrivate={visibility.get(pr.repository_full_name)} /> ·{' '}
+                    {pr.author}
                   </p>
                   <p className="mt-1 font-mono text-xs text-slate-500">
                     {pr.source_branch} → {pr.target_branch}
@@ -104,7 +174,7 @@ export function PullRequestsPage() {
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 {pr.checks.length === 0 ? (
-                  <span className="text-xs text-slate-500">Aucun check CI.</span>
+                  <span className="text-xs text-slate-500">{t('pr.noChecks')}</span>
                 ) : (
                   pr.checks.map((check) => (
                     <Badge
@@ -124,21 +194,22 @@ export function PullRequestsPage() {
                     </Badge>
                   ))
                 )}
-                <span className="text-xs text-slate-500">(* check obligatoire)</span>
+                <span className="text-xs text-slate-500">{t('pr.requiredCheck')}</span>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 pt-4">
                 <div className="text-xs text-slate-400">
-                  {pr.changed_files} fichier(s) · +{pr.additions} / −{pr.deletions}
+                  {t('pr.fileCount', { count: pr.changed_files })} · +{pr.additions} / −
+                  {pr.deletions}
                 </div>
                 <div className="flex items-center gap-3">
                   {pr.merge_eligibility.eligible ? (
                     <Badge className="bg-emerald-500/15 text-emerald-300 ring-emerald-500/30">
-                      Éligible à la fusion
+                      {t('pr.eligible')}
                     </Badge>
                   ) : (
                     <Badge className="bg-slate-500/15 text-slate-300 ring-slate-500/30">
-                      {pr.merge_eligibility.blockers.length} blocage(s)
+                      {t('pr.blockers', { count: pr.merge_eligibility.blockers.length })}
                     </Badge>
                   )}
                   <a
@@ -147,7 +218,7 @@ export function PullRequestsPage() {
                     rel="noreferrer"
                     className="text-sm text-sky-400 hover:text-sky-300"
                   >
-                    Voir sur GitHub
+                    {t('pr.viewOnGitHub')}
                   </a>
                 </div>
               </div>
@@ -164,10 +235,23 @@ export function PullRequestsPage() {
         </div>
       </AsyncState>
 
+      {nextCursor !== null ? (
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setOffset(nextCursor)}
+            disabled={pullRequests.loading}
+            className="rounded-md border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-600 hover:text-sky-300 focus:border-sky-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {t('common.loadMore')}
+          </button>
+        </div>
+      ) : null}
+
       <p className="mt-6 text-center text-xs text-slate-600">
-        Découvrez aussi la liste des{' '}
+        {t('pr.footerPrefix')}{' '}
         <Link to="/repositories" className="text-sky-400 hover:text-sky-300">
-          dépôts suivis
+          {t('pr.footerRepositories')}
         </Link>
         .
       </p>

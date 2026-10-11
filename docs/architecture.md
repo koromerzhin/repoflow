@@ -25,7 +25,7 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 | Répertoire | Responsabilité |
 | --- | --- |
 | `app/api/` | Routes HTTP et dépendances FastAPI. Aucune logique métier. |
-| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`, `configs`, `automation`, `audit`) et `health`. |
+| `app/api/v1/routes/` | Endpoints versionnés (`dashboard`, `repositories`, `pull-requests`, `pull-requests/{number}`, `issues`, `configs`, `automation`, `audit`) et `health`/`health/live`/`health/ready`. |
 | `app/core/` | Configuration, logging, gestion des erreurs, cache TTL mémoire. |
 | `app/db/` | Moteur, sessions et initialisation de la base. |
 | `app/models/` | Modèles ORM SQLAlchemy 2.x. |
@@ -39,8 +39,10 @@ Navigateur ──HTTP──▶ Frontend React (Vite) ──/api──▶ Backend
 1. La route appelle un **service** via une dépendance FastAPI.
 2. Le service interroge le **fournisseur** (`Provider`) pour obtenir des
    enregistrements de domaine (`RepositoryRecord`, `PullRequestRecord`,
-   `IssueRecord`), les résultats étant mis en cache mémoire avec un TTL
-   configurable (`REPOFLOW_CACHE_TTL_SECONDS`, contournable via `?refresh=true`).
+   `IssueRecord`), les résultats étant mis en cache avec un TTL
+   configurable (`REPOFLOW_CACHE_TTL_SECONDS`, contournable via `?refresh=true`),
+   sur le backend `memory` (défaut) ou `redis` (partagé entre instances,
+   `REPOFLOW_CACHE_BACKEND`) avec repli mémoire en cas de panne.
 3. Le service applique les **règles métier** (`merge_rules`) et convertit les
    enregistrements en **schémas d'API**.
 4. La route sérialise la réponse.
@@ -89,12 +91,26 @@ défaut est sûr.
 | `src/components/` | Composants réutilisables (badges, états, cartes). |
 | `src/services/` | Client HTTP centralisé. |
 | `src/hooks/` | Hooks transverses (chargement asynchrone). |
-| `src/lib/` | Libellés français, classes de statut, formatage. |
+| `src/lib/` | Clés de libellés, classes de statut, formatage des dates. |
+| `src/i18n/` | Internationalisation (locales `fr` / `en`, initialisation i18next). |
 | `src/types/` | Types TypeScript calqués sur les schémas Pydantic. |
 
-L'interface est en français, en thème sombre, responsive, et distingue
-systématiquement les états de **chargement**, d'**erreur**, de **liste vide**
-et de **contenu**.
+L'interface est **bilingue français / anglais**, en thème sombre, responsive,
+et distingue systématiquement les états de **chargement**, d'**erreur**, de
+**liste vide** et de **contenu**.
+
+### Internationalisation
+
+- Initialisation dans `src/i18n/index.ts` (i18next + react-i18next +
+  `i18next-browser-languagedetector`) : détection via `?lang=`, puis
+  `localStorage`, puis langue du navigateur ; repli sur le français.
+- Locales dans `src/i18n/locales/{fr,en}.ts` ; les libellés de `src/lib/`
+  référencent des clés (`status.check.success`, …) traduites à l'affichage.
+- La langue choisie est persistée (`localStorage`) et bascule via le
+  sélecteur d'en-tête ; les dates sont formatées selon la langue.
+- Côté backend, les messages (erreurs, bloqueurs de fusion) suivent
+  l'en-tête `Accept-Language`.
+- Les tests forcent le français (`beforeAll` dans `src/test/setup.ts`).
 
 ## Base de données
 
@@ -103,7 +119,11 @@ et de **contenu**.
   `postgresql+psycopg://…`).
 - Migrations gérées par **Alembic** (`backend/alembic/`).
 - Tables : `repository_configs`, `automation_rules`, `audit_events`,
-  `system_settings`.
+  `system_settings`, `daily_snapshots`.
+- `daily_snapshots` (alimentée par le worker) : un agrégat quotidien par
+  dépôt (PR ouvertes, prêtes à fusionner, checks en échec/en cours, issues
+  ouvertes), consultable via `GET /api/v1/snapshots`. Aucune donnée GitHub
+  détaillée n'est persistée.
 - Le moteur SQLAlchemy ajuste ses options selon le dialecte : SQLite
   (`check_same_thread=False`), autres bases (`pool_pre_ping`, taille de pool
   configurables via `REPOFLOW_DB_POOL_*`).
@@ -123,22 +143,23 @@ Les middlewares FastAPI sont empilés (du plus interne au plus externe) :
 2. **En-têtes de sécurité** (`app/core/security.py`) — `X-Content-Type-Options`,
    `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, CSP
    sur les chemins `/api`, HSTS en contexte HTTPS uniquement.
-3. **Métriques** (`app/core/metrics.py`) — registre autonome, exposition
+3. **Authentification** (`app/core/security.py`) — jeton porteur optionnel (`Authorization: Bearer`) activé si `REPOFLOW_API_TOKEN` est défini ; rejet 401 sur `/api/v1/*` avec `WWW-Authenticate: Bearer`.
+4. **Métriques** (`app/core/metrics.py`) — registre autonome, exposition
    Prometheus sur `GET /api/metrics` (libellés par méthode, route et statut ;
    les segments dynamiques sont normalisés via le modèle de route).
-4. **Contexte de requête** (`app/core/request_context.py`) — identifiant de
+5. **Contexte de requête** (`app/core/request_context.py`) — identifiant de
    corrélation `X-Request-ID` (repris du client ou généré, sanitizé), propagé
    dans les journaux par `RequestIdFilter`, renvoyé au client ; journal
    d'accès structuré (`méthode chemin → statut (durée)`).
-5. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
+6. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
    aussi les en-têtes CORS.
 
-À l'exception de la limitation de débit (mémoire, par processus), ces couches
-sont sans état et conveniennent à une mise à l'échelle horizontale.
+La limitation de débit est en mémoire par défaut (par processus) ; le backend
+Redis optionnel (`REPOFLOW_RATE_LIMIT_BACKEND=redis`, compteur partagé avec
+repli mémoire) rend le reste des couches sans état et compatible avec une mise
+à l'échelle horizontale.
 
 ## Évolutions prévues
 
 - **Webhooks GitHub** : ingestion d'événements en temps réel en complément du
   worker périodique.
-- **Stockage partagé du limiteur de débit** (Redis) pour une mise à l'échelle
-  multi-processus.

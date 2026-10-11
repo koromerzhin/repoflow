@@ -11,9 +11,8 @@ from app.schemas.pull_request import CheckState, PullRequestState
 from app.services.data_service import get_combined_data, provider_info
 
 
-def _counters(
-    repositories: list[RepositoryRecord], pull_requests: list[PullRequestRecord]
-) -> DashboardCounters:
+def pull_request_stats(pull_requests: list[PullRequestRecord]) -> dict[str, int]:
+    """Compteurs PR partagés entre le tableau de bord et les snapshots."""
     open_prs = [pr for pr in pull_requests if pr.state == PullRequestState.OPEN]
 
     def has_state(state: CheckState) -> int:
@@ -26,12 +25,20 @@ def _counters(
         and pr.mergeable
         and all(c.state == CheckState.SUCCESS for c in pr.checks if c.required)
     )
+    return {
+        "open_pull_requests": len(open_prs),
+        "pull_requests_ready_to_merge": ready,
+        "pull_requests_with_failing_checks": has_state(CheckState.FAILURE),
+        "pull_requests_pending_checks": has_state(CheckState.PENDING),
+    }
+
+
+def _counters(
+    repositories: list[RepositoryRecord], pull_requests: list[PullRequestRecord]
+) -> DashboardCounters:
     return DashboardCounters(
         repositories=len(repositories),
-        open_pull_requests=len(open_prs),
-        pull_requests_ready_to_merge=ready,
-        pull_requests_with_failing_checks=has_state(CheckState.FAILURE),
-        pull_requests_pending_checks=has_state(CheckState.PENDING),
+        **pull_request_stats(pull_requests),
         open_issues=sum(repository.open_issues_count for repository in repositories),
     )
 

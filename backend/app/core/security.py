@@ -1,18 +1,27 @@
 """Durcissement sécurité : en-têtes HTTP et limitation de débit.
 
 En-têtes : posture restrictive sur les réponses API (aucune exécution, pas de
-navigation par *frame*). Limitation de débit : fenêtre fixe en mémoire, fondée
-sur l'adresse IP du client.
+navigation par *frame*). Limitation de débit : fenêtre fixe fondée sur
+l'adresse IP du client, en mémoire (par instance) ou distribuée via Redis
+(``REPOFLOW_RATE_LIMIT_BACKEND=redis``) avec repli automatique sur mémoire
+en cas de panne.
 """
 
 from __future__ import annotations
 
+import hmac
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi.responses import JSONResponse
-from starlette.datastructures import MutableHeaders
+from starlette.datastructures import Headers, MutableHeaders
+
+from app.core.cache import get_redis_client
+from app.core.i18n import pick_locale, render_message
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _DEFAULT_API_CSP = "default-src 'none'; frame-ancestors 'none'"
 
@@ -62,6 +71,65 @@ class SecurityHeadersMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
+class AuthMiddleware:
+    """Middleware ASGI : exige un jeton porteur sur les routes protégées.
+
+    Désactivé tant qu'aucun jeton n'est configuré. La comparaison se fait en
+    temps constant. Les sondes de santé et l'exposition des métriques restent
+    hors périmètre afin de ne pas gêner les orchestrateurs.
+    """
+
+    def __init__(
+        self,
+        app,
+        *,
+        token: str,
+        protected_prefixes: tuple[str, ...] = ("/api/v1",),
+    ) -> None:
+        self.app = app
+        self._token = token
+        self._prefixes = protected_prefixes
+
+    def _is_protected(self, path: str) -> bool:
+        return any(path == prefix or path.startswith(f"{prefix}/") for prefix in self._prefixes)
+
+    @staticmethod
+    def _header_token(headers: Headers) -> str | None:
+        authorization = headers.get("authorization", "")
+        scheme, _, credentials = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not credentials:
+            return None
+        return credentials.strip()
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http" or not self._is_protected(scope.get("path", "")):
+            await self.app(scope, receive, send)
+            return
+
+        provided = self._header_token(Headers(scope=scope))
+        if provided is not None and hmac.compare_digest(provided, self._token):
+            await self.app(scope, receive, send)
+            return
+
+        locale = pick_locale(Headers(scope=scope).get("accept-language", ""))
+        response = JSONResponse(
+            status_code=401,
+            content={
+                "error": {
+                    "code": "unauthorized",
+                    "message": render_message(
+                        "unauthorized",
+                        locale,
+                        None,
+                        "Authentification requise : jeton d'accès invalide ou manquant.",
+                    ),
+                }
+            },
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        await response(scope, receive, send)
+
+
 class RateLimiter:
     """Limiteur de débit à fenêtre fixe, sans état hors mémoire."""
 
@@ -74,7 +142,7 @@ class RateLimiter:
         self.window_seconds = window_seconds
         self._buckets: dict[str, tuple[float, int]] = {}
 
-    def allow(self, key: str) -> bool:
+    async def allow(self, key: str) -> bool:
         """Autorise la requête si le seuil de la fenêtre n'est pas atteint."""
         now = time.monotonic()
         window_start, count = self._buckets.get(key, (0.0, 0))
@@ -86,7 +154,7 @@ class RateLimiter:
         self._buckets[key] = (window_start, count + 1)
         return True
 
-    def remaining(self, key: str) -> int:
+    async def remaining(self, key: str) -> int:
         """Retourne le nombre de requêtes encore autorisées dans la fenêtre."""
         now = time.monotonic()
         window_start, count = self._buckets.get(key, (0.0, 0))
@@ -97,6 +165,69 @@ class RateLimiter:
     def reset(self) -> None:
         """Vide l'état du limiteur (tests et rotation)."""
         self._buckets.clear()
+
+
+class RedisRateLimiter:
+    """Limiteur de débit distribué (``INCR`` + ``EXPIRE``).
+
+    Compteur partagé entre instances. Toute erreur Redis replie sur le
+    limiteur mémoire local : une panne du backend ne bloque jamais les
+    requêtes.
+    """
+
+    _key_prefix = "repoflow:ratelimit:"
+
+    def __init__(
+        self,
+        *,
+        requests: int,
+        window_seconds: int,
+        client_factory: Callable[[], Awaitable[Any]] = get_redis_client,
+    ) -> None:
+        self.requests = requests
+        self.window_seconds = window_seconds
+        self._client_factory = client_factory
+        self._fallback = RateLimiter(requests=requests, window_seconds=window_seconds)
+
+    async def allow(self, key: str) -> bool:
+        try:
+            client = await self._client_factory()
+            count = await client.incr(self._key_prefix + key)
+            if count == 1:
+                await client.expire(self._key_prefix + key, self.window_seconds)
+            return int(count) <= self.requests
+        except Exception as cause:
+            logger.warning(
+                "Limiteur Redis indisponible (%s) ; repli mémoire.",
+                type(cause).__name__,
+            )
+            return await self._fallback.allow(key)
+
+    async def remaining(self, key: str) -> int:
+        try:
+            client = await self._client_factory()
+            raw = await client.get(self._key_prefix + key)
+            count = int(raw) if raw else 0
+            return max(0, self.requests - count)
+        except Exception as cause:
+            logger.warning(
+                "Limiteur Redis indisponible (%s) ; repli mémoire.",
+                type(cause).__name__,
+            )
+            return await self._fallback.remaining(key)
+
+    def reset(self) -> None:
+        """Vide uniquement le repli mémoire (tests)."""
+        self._fallback.reset()
+
+
+def build_rate_limiter(
+    *, backend: str, requests: int, window_seconds: int
+) -> RateLimiter | RedisRateLimiter:
+    """Construit le limiteur selon le backend configuré."""
+    if backend == "redis":
+        return RedisRateLimiter(requests=requests, window_seconds=window_seconds)
+    return RateLimiter(requests=requests, window_seconds=window_seconds)
 
 
 class RateLimitMiddleware:
@@ -128,7 +259,7 @@ class RateLimitMiddleware:
             return
 
         key = self._client_key(scope)
-        if not self._limiter.allow(key):
+        if not await self._limiter.allow(key):
             response = JSONResponse(
                 status_code=429,
                 content={

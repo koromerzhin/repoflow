@@ -25,3 +25,7 @@ class AuditListResponse(BaseModel):
 
     items: list[AuditEventRead]
     total: int = Field(ge=0)
+    next_cursor: int | None = Field(
+        default=None,
+        description="Identifiant à passer à ``before_id`` pour la page suivante.",
+    )

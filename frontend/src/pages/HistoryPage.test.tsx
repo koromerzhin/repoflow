@@ -3,13 +3,15 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { HistoryPage } from '@/pages/HistoryPage'
-import { getAudit } from '@/services/apiClient'
+import { exportAudit, getAudit } from '@/services/apiClient'
 import type { AuditListResponse } from '@/types/api'
 
 vi.mock('@/services/apiClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/apiClient')>()
-  return { ...actual, getAudit: vi.fn() }
+  return { ...actual, getAudit: vi.fn(), exportAudit: vi.fn() }
 })
+
+vi.mock('@/lib/download', () => ({ downloadTextFile: vi.fn() }))
 
 const audit: AuditListResponse = {
   items: [
@@ -46,8 +48,11 @@ function renderPage() {
 }
 
 describe('HistoryPage', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.mocked(getAudit).mockResolvedValue(audit)
+    const { downloadTextFile } = await import('@/lib/download')
+    vi.mocked(downloadTextFile).mockReset()
+    vi.mocked(exportAudit).mockReset()
   })
 
   it('affiche les événements du journal', async () => {
@@ -92,5 +97,42 @@ describe('HistoryPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
+  })
+
+  it('exporte le journal en CSV', async () => {
+    const { downloadTextFile } = await import('@/lib/download')
+    vi.mocked(exportAudit).mockResolvedValue({
+      content: 'id,message\n1,ok',
+      filename: 'repoflow-audit-20260101.csv',
+    })
+    renderPage()
+    await screen.findByText('PR #142 fusionnée (squash).')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter CSV' }))
+
+    await waitFor(() =>
+      expect(exportAudit).toHaveBeenCalledWith(
+        expect.objectContaining({ format: 'csv', event_type: undefined }),
+      ),
+    )
+    await waitFor(() =>
+      expect(downloadTextFile).toHaveBeenCalledWith(
+        'repoflow-audit-20260101.csv',
+        'id,message\n1,ok',
+        'text/csv',
+      ),
+    )
+  })
+
+  it('affiche une erreur si l’export échoue', async () => {
+    vi.mocked(exportAudit).mockRejectedValue(new Error('boom'))
+    renderPage()
+    await screen.findByText('PR #142 fusionnée (squash).')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Exporter JSON' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent("L'export a échoué. Réessayez."),
+    )
   })
 })

@@ -16,7 +16,11 @@ import type {
   RepositoryConfigListResponse,
   RepositoryConfigUpdate,
   RepositoryListResponse,
+  SnapshotListResponse,
 } from '@/types/api'
+import type { TFunction } from 'i18next'
+
+import { getToken, markUnauthorized } from '@/lib/auth'
 
 /**
  * Erreur normalisée renvoyée par le client HTTP.
@@ -32,6 +36,21 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
   }
+}
+
+/**
+ * Traduit les erreurs produites côté client (réseau, HTTP générique).
+ * Les erreurs du backend portent déjà un message localisé : elles sont
+ * telles quelles.
+ */
+export function apiErrorMessage(error: ApiError, t: TFunction): string {
+  if (error.code === 'network_error') {
+    return t('api.networkError')
+  }
+  if (error.code === 'http_error') {
+    return t('api.httpError', { status: error.status })
+  }
+  return error.message
 }
 
 const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -50,9 +69,14 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+function authHeaders(): Record<string, string> {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, signal } = options
-  const headers: Record<string, string> = { Accept: 'application/json' }
+  const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
   const init: RequestInit = { method, headers, signal }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -71,6 +95,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      markUnauthorized()
+    }
     let errorBody: unknown = null
     try {
       errorBody = await response.json()
@@ -133,22 +160,35 @@ export function getRepositories(
 }
 
 export function getPullRequests(
-  params: { repository?: string } & Refreshable = {},
+  params: { repository?: string; search?: string; offset?: number } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<PullRequestListResponse> {
   return request<PullRequestListResponse>(
-    `/v1/pull-requests${buildQuery({ repository: params.repository }, params.refresh)}`,
+    `/v1/pull-requests${buildQuery(
+      { repository: params.repository, search: params.search, offset: params.offset?.toString() },
+      params.refresh,
+    )}`,
     { signal },
   )
 }
 
 export function getIssues(
-  params: { repository?: string; state?: 'open' | 'closed' | 'all' } & Refreshable = {},
+  params: {
+    repository?: string
+    state?: 'open' | 'closed' | 'all'
+    search?: string
+    offset?: number
+  } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<IssueListResponse> {
   return request<IssueListResponse>(
     `/v1/issues${buildQuery(
-      { repository: params.repository, state: params.state },
+      {
+        repository: params.repository,
+        state: params.state,
+        search: params.search,
+        offset: params.offset?.toString(),
+      },
       params.refresh,
     )}`,
     { signal },
@@ -163,6 +203,23 @@ export function getPullRequestDetail(
 ): Promise<PullRequestDetail> {
   return request<PullRequestDetail>(
     `/v1/pull-requests/${number}${buildQuery({ repository }, options.refresh)}`,
+    { signal },
+  )
+}
+
+export function getSnapshots(
+  params: { repository?: string; since?: string; limit?: number } & Refreshable = {},
+  signal?: AbortSignal,
+): Promise<SnapshotListResponse> {
+  return request<SnapshotListResponse>(
+    `/v1/snapshots${buildQuery(
+      {
+        repository: params.repository,
+        since: params.since,
+        limit: params.limit?.toString(),
+      },
+      params.refresh,
+    )}`,
     { signal },
   )
 }
@@ -214,6 +271,41 @@ export function updateRule(id: number, payload: AutomationRuleUpdate): Promise<A
 
 export function deleteRule(id: number): Promise<void> {
   return request<void>(`/v1/configs/rules/${id}`, { method: 'DELETE' })
+}
+
+export interface AuditExport {
+  content: string
+  filename: string
+}
+
+export async function exportAudit(
+  params: { event_type?: string; repository?: string; format?: 'csv' | 'json' } = {},
+): Promise<AuditExport> {
+  const format = params.format ?? 'csv'
+  const query = buildQuery({
+    event_type: params.event_type,
+    repository: params.repository,
+    format,
+  })
+  const response = await fetch(`${API_BASE_URL}/v1/audit/export${query}`, {
+    headers: { ...authHeaders() },
+  })
+  if (response.status === 401) {
+    markUnauthorized()
+  }
+  if (!response.ok) {
+    throw new ApiError(
+      `La requête a échoué (statut ${response.status}).`,
+      response.status,
+      'http_error',
+    )
+  }
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const match = /filename="?([^"]+)"?/.exec(disposition)
+  return {
+    content: await response.text(),
+    filename: match?.[1] ?? `repoflow-audit.${format}`,
+  }
 }
 
 export function getAutomationStatus(signal?: AbortSignal): Promise<AutomationStatus> {

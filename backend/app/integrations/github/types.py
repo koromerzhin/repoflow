@@ -55,6 +55,9 @@ class IssueRecord(BaseModel):
     author: str
     state: IssueState
     is_pull_request: bool = False
+    labels: list[str] = Field(default_factory=list)
+    assignees: list[str] = Field(default_factory=list)
+    milestone: str | None = None
     created_at: datetime
     updated_at: datetime
     html_url: str

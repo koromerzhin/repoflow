@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { PullRequestsPage } from '@/pages/PullRequestsPage'
@@ -11,6 +11,11 @@ vi.mock('@/services/apiClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/apiClient')>()
   return { ...actual, getPullRequests: vi.fn(), getRepositories: vi.fn() }
 })
+
+function LocationProbe() {
+  const { search } = useLocation()
+  return <span data-testid="location">{search}</span>
+}
 
 const repositories: RepositoryListResponse = {
   items: [
@@ -27,8 +32,21 @@ const repositories: RepositoryListResponse = {
       html_url: 'https://github.com/acme/web-app',
       is_demo: true,
     },
+    {
+      id: 'repo-2',
+      owner: 'acme',
+      name: 'mobile-api',
+      full_name: 'acme/mobile-api',
+      default_branch: 'main',
+      private: true,
+      open_issues_count: 1,
+      open_pull_requests_count: 1,
+      last_updated: '2026-01-01T11:00:00Z',
+      html_url: 'https://github.com/acme/mobile-api',
+      is_demo: true,
+    },
   ],
-  total: 1,
+  total: 2,
   data_source: 'demo',
 }
 
@@ -94,15 +112,48 @@ const pullRequests: PullRequestListResponse = {
       html_url: 'https://github.com/acme/web-app/pull/143',
       is_demo: true,
     },
+    {
+      id: 'pr-3',
+      number: 144,
+      repository_full_name: 'acme/mobile-api',
+      title: 'Correctif des notifications push',
+      author: 'tom.m',
+      state: 'open',
+      is_draft: false,
+      source_branch: 'fix/notifications',
+      target_branch: 'main',
+      checks_state: 'pending',
+      review_decision: 'none',
+      checks: [
+        {
+          name: 'ci/lint',
+          state: 'pending',
+          conclusion: null,
+          details_url: null,
+          required: false,
+        },
+      ],
+      mergeable: true,
+      changed_files: 3,
+      additions: 12,
+      deletions: 2,
+      merge_eligibility: { eligible: true, blockers: [] },
+      created_at: '2026-01-01T12:00:00Z',
+      updated_at: '2026-01-02T12:00:00Z',
+      html_url: 'https://github.com/acme/mobile-api/pull/144',
+      is_demo: true,
+    },
   ],
   total: 2,
   data_source: 'demo',
+  next_cursor: null,
 }
 
 function renderPage() {
   return render(
     <MemoryRouter>
       <PullRequestsPage />
+      <LocationProbe />
     </MemoryRouter>,
   )
 }
@@ -120,10 +171,10 @@ describe('PullRequestsPage', () => {
     expect(screen.getByText('#142')).toBeInTheDocument()
     expect(screen.getByText('acme/web-app · sam.r')).toBeInTheDocument()
     expect(screen.getByText('feature/billing → main')).toBeInTheDocument()
-    expect(screen.getAllByText('Ouverte')).toHaveLength(2)
+    expect(screen.getAllByText('Ouverte')).toHaveLength(3)
     expect(screen.getByText('Approuvée')).toBeInTheDocument()
     expect(screen.getByText('Réussi')).toBeInTheDocument()
-    expect(screen.getByText('Éligible à la fusion')).toBeInTheDocument()
+    expect(screen.getAllByText('Éligible à la fusion')).toHaveLength(2)
     expect(screen.getByText(/2 fichier\(s\) · \+30 \/ −5/)).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Voir sur GitHub' })[0]).toHaveAttribute(
       'href',
@@ -161,22 +212,79 @@ describe('PullRequestsPage', () => {
       expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
     )
 
-    await user.selectOptions(
-      screen.getByRole('combobox'),
-      await screen.findByRole('option', { name: 'acme/web-app' }),
-    )
+    await user.click(screen.getByRole('combobox', { name: 'Dépôt' }))
+    await user.click(await screen.findByRole('option', { name: /acme\/web-app/ }))
 
     await waitFor(() =>
       expect(getPullRequests).toHaveBeenLastCalledWith(
-        { repository: 'acme/web-app', refresh: false },
+        { repository: 'acme/web-app', offset: 0, refresh: false },
         expect.anything(),
+      ),
+    )
+  })
+
+  it('filtre les pull requests par recherche texte côté serveur', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+
+    await waitFor(() => {
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        { search: 'facturation', offset: 0, refresh: false },
+        expect.anything(),
+      )
+    })
+  })
+
+  it('affiche la visibilité des dépôts sur les cartes', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+    expect(screen.getAllByText('Privé').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Public').length).toBeGreaterThan(0)
+  })
+
+  it('persiste la recherche et le dépôt dans l’URL', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    vi.mocked(getPullRequests).mockResolvedValue(pullRequests)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('q=facturation'),
+    )
+
+    await user.click(screen.getByRole('combobox', { name: 'Dépôt' }))
+    await user.click(await screen.findByRole('option', { name: /acme\/web-app/ }))
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        'q=facturation&repository=acme%2Fweb-app',
       ),
     )
   })
 
   it('affiche un état vide', async () => {
     vi.mocked(getRepositories).mockResolvedValue(repositories)
-    vi.mocked(getPullRequests).mockResolvedValue({ items: [], total: 0, data_source: 'demo' })
+    vi.mocked(getPullRequests).mockResolvedValue({ items: [], total: 0, data_source: 'demo', next_cursor: null })
 
     renderPage()
 
@@ -193,5 +301,83 @@ describe('PullRequestsPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
+  })
+
+  it('charge la page suivante via « Charger plus »', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: PullRequestListResponse = {
+      items: [
+        {
+          ...pullRequests.items[0],
+          id: 'pr-4',
+          number: 145,
+          title: 'Nouvelle fonctionnalité',
+        },
+      ],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getPullRequests)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Nouvelle fonctionnalité')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Nouvelle fonctionnalité')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Charger plus' })).not.toBeInTheDocument()
+    expect(getPullRequests).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+      expect.anything(),
+    )
+  })
+
+  it('réinitialise la pagination quand le filtre change', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: PullRequestListResponse = {
+      items: [{ ...pullRequests.items[0], id: 'pr-4', number: 145, title: 'Page deux' }],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getPullRequests)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: null })
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() =>
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 2 }),
+        expect.anything(),
+      ),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+
+    await waitFor(() =>
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        { search: 'facturation', offset: 0, refresh: false },
+        expect.anything(),
+      ),
+    )
   })
 })

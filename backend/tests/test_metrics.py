@@ -5,7 +5,19 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.metrics import MetricsMiddleware, MetricsRegistry
+from app.core.metrics import (
+    MetricsMiddleware,
+    MetricsRegistry,
+    record_cache_event,
+    record_merge,
+    record_provider_request,
+    record_worker_run,
+    registry,
+)
+
+
+def _snapshot_metrics() -> str:
+    return registry.render(version="0.1.0", environment="test")
 
 
 def _sample_app(metrics_registry: MetricsRegistry) -> FastAPI:
@@ -62,3 +74,53 @@ def test_route_metrics_expose_les_series(client) -> None:
     assert response.status_code == 200
     assert "text/plain" in response.headers["content-type"]
     assert 'repoflow_http_requests_total{method="GET",path="/health"' in response.text
+
+
+def test_histogramme_expose_les_buckets() -> None:
+    registry = MetricsRegistry()
+    registry.observe("GET", "/api/x", 200, 0.03)
+    registry.observe("GET", "/api/x", 200, 2.0)
+
+    text = registry.render(version="0.1.0", environment="test")
+    assert "repoflow_http_request_duration_seconds histogram" in text
+    assert (
+        'repoflow_http_request_duration_seconds_bucket{method="GET",path="/api/x",le="0.025"} 0'
+        in text
+    )
+    assert (
+        'repoflow_http_request_duration_seconds_bucket{method="GET",path="/api/x",le="0.05"} 1'
+        in text
+    )
+    assert (
+        'repoflow_http_request_duration_seconds_bucket{method="GET",path="/api/x",le="+Inf"} 2'
+        in text
+    )
+    assert 'repoflow_http_request_duration_seconds_count{method="GET",path="/api/x"} 2' in text
+
+
+def test_compteurs_metier_rendus() -> None:
+    registry = MetricsRegistry()
+    registry.increment("repoflow_merges_total", help="H", labels={"result": "succeeded"})
+    registry.increment("repoflow_merges_total", help="H", labels={"result": "succeeded"})
+    registry.increment("repoflow_merges_total", help="H", labels={"result": "failed"})
+    registry.set_gauge("repoflow_worker_last_success_timestamp_seconds", 42.0, help="G")
+
+    text = registry.render(version="0.1.0", environment="test")
+    assert "# TYPE repoflow_merges_total counter" in text
+    assert 'repoflow_merges_total{result="succeeded"} 2' in text
+    assert 'repoflow_merges_total{result="failed"} 1' in text
+    assert "repoflow_worker_last_success_timestamp_seconds 42" in text
+
+
+def test_fonctions_d_enregistrement_ecrivent_dans_le_registre() -> None:
+    record_merge("succeeded")
+    record_worker_run("success")
+    record_provider_request("graphql")
+    record_cache_event("hit")
+
+    text = _snapshot_metrics()
+    assert 'repoflow_merges_total{result="succeeded"}' in text
+    assert 'repoflow_worker_runs_total{result="success"}' in text
+    assert 'repoflow_provider_requests_total{transport="graphql"}' in text
+    assert 'repoflow_cache_events_total{event="hit"}' in text
+    assert "repoflow_worker_last_success_timestamp_seconds" in text

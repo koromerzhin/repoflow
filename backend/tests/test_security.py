@@ -66,23 +66,23 @@ def test_hsts_uniquement_en_fonction_du_contexte() -> None:
     assert "Strict-Transport-Security" in secured_client.get("/api/ping").headers
 
 
-def test_limiteur_seuil_et_remise_a_zero() -> None:
+async def test_limiteur_seuil_et_remise_a_zero() -> None:
     limiter = RateLimiter(requests=2, window_seconds=60)
-    assert limiter.allow("client-a") is True
-    assert limiter.allow("client-a") is True
-    assert limiter.allow("client-a") is False
-    assert limiter.remaining("client-a") == 0
-    assert limiter.allow("client-b") is True
+    assert await limiter.allow("client-a") is True
+    assert await limiter.allow("client-a") is True
+    assert await limiter.allow("client-a") is False
+    assert await limiter.remaining("client-a") == 0
+    assert await limiter.allow("client-b") is True
     limiter.reset()
-    assert limiter.allow("client-a") is True
+    assert await limiter.allow("client-a") is True
 
 
-def test_limiteur_fenetre_expire() -> None:
+async def test_limiteur_fenetre_expire() -> None:
     limiter = RateLimiter(requests=1, window_seconds=1)
-    assert limiter.allow("client") is True
-    assert limiter.allow("client") is False
+    assert await limiter.allow("client") is True
+    assert await limiter.allow("client") is False
     time.sleep(1.05)
-    assert limiter.allow("client") is True
+    assert await limiter.allow("client") is True
 
 
 @pytest.mark.parametrize("requests", [0, -1])

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,15 +9,26 @@ WORKDIR /app
 # Dépendances d'abord pour tirer parti du cache Docker.
 COPY pyproject.toml README.md ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install .
+# Support PostgreSQL optionnel via --build-arg REPOFLOW_INSTALL_POSTGRES=true
+# (l'extra "postgres" embarque psycopg ; SQLite reste le défaut).
+ARG REPOFLOW_INSTALL_POSTGRES=false
+RUN pip install --upgrade pip && \
+    pip install . && \
+    if [ "$REPOFLOW_INSTALL_POSTGRES" = "true" ]; then \
+      pip install "psycopg[binary]>=3.1"; \
+    fi
 
 # Outils de migration et de développement (Alembic).
 COPY alembic.ini ./
 COPY alembic ./alembic
 
-# Répertoire de données persistantes (base SQLite).
-RUN mkdir -p /data
+# Répertoire de données persistantes (base SQLite) + utilisateur non-root.
+RUN mkdir -p /data && \
+    useradd --create-home --uid 1001 repoflow && \
+    chown -R repoflow:repoflow /data /app
 ENV REPOFLOW_DATABASE_URL=sqlite+pysqlite:////data/repoflow.db
+
+USER repoflow
 
 EXPOSE 8000
 
