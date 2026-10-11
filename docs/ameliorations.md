@@ -130,3 +130,102 @@ Reste éventuellement : lister les installations dynamiquement
   indicateur privé/public.
 - Sécurité : en-têtes restrictifs, rate limiting, corrélations `X-Request-ID`,
   métriques Prometheus, garde-fous de fusion.
+
+---
+
+# Nouvelle analyse — 11/10/2026 (branche `develop`, commit `ff24367`)
+
+État : backend 215 tests (couverture 92,7 %), frontend 79 tests + 4 E2E,
+toutes les pistes P1/P2 actives réalisées. Nouvelles pistes, classées par
+rapport valeur/effort.
+
+## P1 — Rapides
+
+### 16. Chaînes d'erreur frontend non localisées
+Deux messages d'erreur de `apiClient.ts` (« Impossible de contacter le
+serveur… », « La requête a échoué… ») et l'exception de `main.tsx` sont en
+français dur, hors `src/i18n/`. Les passer par des clés de traduction
+(`api.networkError`, `api.httpError`, `app.rootMissing`) pour une interface
+réellement bilingue de bout en bout.
+*Fichiers : `frontend/src/services/apiClient.ts`, `main.tsx`. Effort : S.*
+
+### 17. Focus sur le contenu à chaque navigation
+Seul le lien « Aller au contenu » existe : après un changement de route, le
+focus reste sur le lien cliqué. Déplacer le focus sur `<main>` (ou son
+titre) à chaque navigation pour les lecteurs d'écran et le clavier.
+*Fichier : `frontend/src/layouts/AppLayout.tsx`. Effort : S.*
+
+### 18. Titres de page par route
+`<title>RepoFlow</title>` est statique : impossible de distinguer les pages
+dans l'historique ou les onglets. Un petit hook `useDocumentTitle(t('…'))`
+appliqué par page (et traduit).
+*Fichier : `frontend/index.html` + pages. Effort : S.*
+
+### 19. Dockerfile backend : retirer le frontend BuildKit
+`# syntax=docker/dockerfile:1` force le pull de `docker/dockerfile:1` à chaque
+build (échec DNS observé le 10/10) et l'extra `postgres` est installé
+systématiquement (image +lourde). Supprimer la ligne de syntax, n'installer
+`psycopg` que via un profil ou un build arg, ajouter un utilisateur non-root.
+*Fichier : `backend/Dockerfile`. Effort : S.*
+
+## P2 — Structurants
+
+### 20. Code splitting des routes
+Toutes les pages sont importées statiquement dans `App.tsx` : un seul bundle
+de ~390 Ko (117 Ko gzip) est téléchargé pour la première page. `React.lazy`
++ `Suspense` par page (le layout reste hors chunk).
+*Fichier : `frontend/src/App.tsx`. Effort : S-M.*
+
+### 21. ErrorBoundary frontend
+Aucune frontière d'erreur : un crash de rendu d'une page blanchit toute
+l'application. Un `ErrorBoundary` autour des routes avec message traduit et
+bouton de rechargement.
+*Fichier : `frontend/src/App.tsx` + `src/i18n`. Effort : S.*
+
+### 22. Tests du worker (couverture 30 %)
+`app/worker.py` est le moins couvert du backend (`run_once`,
+`_record_snapshot`, `_purge_audit`). Tester une passe complète avec un
+fournisseur factice : analyse, purge d'audit, snapshot, tolérance aux
+erreurs du snapshot.
+*Effort : M.*
+
+### 23. Limiteur de débit distribué
+Le rate limiting (`app/core/security.py`) est en mémoire par instance : sans
+effet en multi-instances et réinitialisé à chaque redémarrage. Même
+problématique que l'ancien cache : brancher un backend Redis optionnel
+(`REPOFLOW_RATE_LIMIT_BACKEND=memory|redis`) ou documenter la limite
+mono-instance.
+*Effort : M.*
+
+### 24. Pagination des listes PR/issues
+Les routes plafonnent à 500 éléments sans pagination côté frontend : au-delà,
+les données sont silencieusement tronquées. Ajouter `offset`/`before_id`
+(curseur déjà prévu pour l'audit) et un chargement progressif (« Charger
+plus » ou infini scroll) dans les listes.
+*Effort : M.*
+
+## P3 — Long terme
+
+### 25. Visualisation des snapshots
+`daily_snapshots` est persisté et exposé (`GET /api/v1/snapshots`) mais rien
+ne l'affiche. Un graphique d'évolution (sparkline SVG sans dépendance, ou
+librairie légère) sur le tableau de bord par compteur.
+*Effort : M.*
+
+### 26. CI : build Docker et dépendances
+La CI teste le code mais jamais les images Docker (le build a déjà échoué en
+dehors d'elle) et rien ne surveille les dépendances. Ajouter un job
+`docker build` des deux images et activer Dependabot (ou Renovate).
+*Effort : S-M.*
+
+### 27. Messages d'audit figés dans une langue
+Les messages d'audit sont rédigés en français au moment de l'écriture : un
+utilisateur anglophone relit un journal en français. Décider : stocker le
+code + paramètres et traduire à l'affichage, ou documenter la limitation.
+*Effort : M (décision de design).*
+
+### 28. Accessibilité : contrastes du thème clair
+Le thème clair a été produit par inversion de palette sans vérification des
+contrastes (WCAG AA). Auditer les paires texte/fond principales et ajuster
+les tokens si nécessaire.
+*Effort : S.*
