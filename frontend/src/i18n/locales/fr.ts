@@ -145,6 +145,8 @@ export const fr = {
     private: 'Privé',
     public: 'Public',
     open: 'Ouvrir',
+    goIssues: 'Voir les {{count}} issues du dépôt',
+    goPullRequests: 'Voir les {{count}} pull requests du dépôt',
   },
   pr: {
     title: 'Pull requests',

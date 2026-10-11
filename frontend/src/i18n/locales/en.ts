@@ -143,6 +143,8 @@ export const en = {
     private: 'Private',
     public: 'Public',
     open: 'Open',
+    goIssues: 'View the {{count}} issues of the repository',
+    goPullRequests: 'View the {{count}} pull requests of the repository',
   },
   pr: {
     title: 'Pull requests',

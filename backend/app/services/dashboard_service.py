@@ -51,6 +51,7 @@ def _recent_activity(pull_requests: list[PullRequestRecord]) -> list[ActivityIte
             event_type="pull_request_update",
             message=(f"PR #{pr.number} « {pr.title} » ({pr.repository_full_name}) mise à jour."),
             repository_full_name=pr.repository_full_name,
+            pull_request_number=pr.number,
             occurred_at=pr.updated_at,
         )
         for pr in ordered[:6]

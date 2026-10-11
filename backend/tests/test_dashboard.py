@@ -25,6 +25,9 @@ def test_dashboard_structure(client: TestClient) -> None:
     first = payload["recent_activity"][0]
     assert first["repository_full_name"]
     assert first["occurred_at"]
+    # Chaque activité référence sa PR : le client peut lier vers son détail.
+    assert isinstance(first["pull_request_number"], int)
+    assert first["pull_request_number"] >= 1
 
 
 def test_dashboard_recent_activity_sorted(client: TestClient) -> None:

@@ -7,6 +7,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
@@ -20,6 +21,7 @@ import { useAsync, useResource } from '@/hooks/useAsync'
 import { aggregateSnapshots, seriesFor } from '@/lib/snapshots'
 import { formatDateTime } from '@/lib/status'
 import { getDashboard, getSnapshots } from '@/services/apiClient'
+import type { ActivityItem } from '@/types/api'
 
 const TREND_WINDOW_DAYS = 30
 
@@ -53,6 +55,18 @@ export function DashboardPage() {
     refresh()
     reloadSnapshots()
   }, [refresh, reloadSnapshots])
+
+  function activityTarget(item: ActivityItem): string | null {
+    if (!item.repository_full_name) {
+      return null
+    }
+    if (item.pull_request_number !== null) {
+      return `/pull-requests/${item.pull_request_number}?repository=${encodeURIComponent(
+        item.repository_full_name,
+      )}`
+    }
+    return `/pull-requests?repository=${encodeURIComponent(item.repository_full_name)}`
+  }
 
   useAutoRefresh(refreshAll, autoSeconds > 0 ? autoSeconds * 1000 : null)
   const counters = data?.counters
@@ -133,22 +147,31 @@ export function DashboardPage() {
               {t('dashboard.recentActivity')}
             </h2>
             <ul className="divide-y divide-slate-800 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40">
-              {data.recent_activity.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <p className="text-sm text-slate-200">{item.message}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.repository_full_name ?? '—'}
-                    </p>
-                  </div>
-                  <time className="text-xs text-slate-500" dateTime={item.occurred_at}>
-                    {formatDateTime(item.occurred_at)}
-                  </time>
-                </li>
-              ))}
+              {data.recent_activity.map((item) => {
+                const target = activityTarget(item)
+                return (
+                  <li
+                    key={item.id}
+                    className="flex flex-col gap-1 px-5 py-3 transition hover:bg-slate-900/60 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <p className="text-sm text-slate-200">
+                        {target ? (
+                          <Link to={target} className="hover:text-sky-300 hover:underline">
+                            {item.message}
+                          </Link>
+                        ) : (
+                          item.message
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-500">{item.repository_full_name ?? '—'}</p>
+                    </div>
+                    <time className="text-xs text-slate-500" dateTime={item.occurred_at}>
+                      {formatDateTime(item.occurred_at)}
+                    </time>
+                  </li>
+                )
+              })}
             </ul>
           </section>
         ) : null}

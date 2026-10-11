@@ -10,6 +10,35 @@ test('le tableau de bord affiche les compteurs et le bandeau démo', async ({ pa
   await expect(page.getByText('Activité récente')).toBeVisible()
 })
 
+test('les activités récentes mènent au détail de la pull request', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByText('Activité récente')).toBeVisible()
+
+  const firstActivity = page.locator('section ul li a').first()
+  await expect(firstActivity).toContainText(/PR #\d+/)
+  await firstActivity.click()
+
+  await expect(page).toHaveURL(/\/pull-requests\/\d+\?repository=/)
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+})
+
+test('les dépôts mènent à leurs pull requests et leurs issues', async ({ page }) => {
+  await page.goto('/repositories')
+  await expect(page.getByRole('caption')).toBeVisible()
+
+  await page
+    .getByRole('link', { name: /Voir les \d+ pull requests du dépôt/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL(/\/pull-requests\?repository=/)
+  await expect(page.getByRole('heading', { name: 'Pull requests' })).toBeVisible()
+
+  await page.goto('/repositories')
+  await page.getByRole('link', { name: /Voir les \d+ issues du dépôt/ }).first().click()
+  await expect(page).toHaveURL(/\/issues\?repository=/)
+  await expect(page.getByRole('heading', { name: 'Issues' })).toBeVisible()
+})
+
 test('la liste des pull requests se filtre par recherche', async ({ page }) => {
   await page.goto('/pull-requests')
   await expect(page.getByRole('heading', { name: 'Pull requests' })).toBeVisible()

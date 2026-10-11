@@ -1,4 +1,5 @@
 import { ExternalLink, Lock, Globe } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
@@ -85,11 +86,29 @@ export function RepositoriesPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                    {repository.open_issues_count}
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    <Link
+                      to={`/issues?repository=${encodeURIComponent(repository.full_name)}`}
+                      aria-label={t('repositories.goIssues', {
+                        count: repository.open_issues_count,
+                      })}
+                      className="text-slate-300 hover:text-sky-300 hover:underline"
+                    >
+                      {repository.open_issues_count}
+                    </Link>
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-slate-300">
-                    {repository.open_pull_requests_count}
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    <Link
+                      to={`/pull-requests?repository=${encodeURIComponent(
+                        repository.full_name,
+                      )}`}
+                      aria-label={t('repositories.goPullRequests', {
+                        count: repository.open_pull_requests_count,
+                      })}
+                      className="text-slate-300 hover:text-sky-300 hover:underline"
+                    >
+                      {repository.open_pull_requests_count}
+                    </Link>
                   </td>
                   <td className="px-4 py-3 text-slate-400">
                     {formatDateTime(repository.last_updated)}

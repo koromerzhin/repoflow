@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -28,7 +29,16 @@ const dashboard: DashboardResponse = {
       event_type: 'pull_request_update',
       message: 'PR #142 mise à jour.',
       repository_full_name: 'acme/web-app',
+      pull_request_number: 142,
       occurred_at: '2026-01-01T09:00:00Z',
+    },
+    {
+      id: 'a2',
+      event_type: 'pull_request_update',
+      message: 'PR sans numéro.',
+      repository_full_name: null,
+      pull_request_number: null,
+      occurred_at: '2026-01-01T08:00:00Z',
     },
   ],
 }
@@ -43,7 +53,11 @@ describe('DashboardPage', () => {
   it('affiche les indicateurs du tableau de bord', async () => {
     vi.mocked(getDashboard).mockResolvedValue(dashboard)
 
-    render(<DashboardPage />)
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
 
     await waitFor(() => expect(screen.getByText('Dépôts suivis')).toBeInTheDocument())
 
@@ -52,11 +66,32 @@ describe('DashboardPage', () => {
     expect(screen.getByText('PR #142 mise à jour.')).toBeInTheDocument()
   })
 
+  it('lie chaque activité vers la pull request correspondante', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(dashboard)
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('PR #142 mise à jour.')).toBeInTheDocument())
+
+    const link = screen.getByRole('link', { name: 'PR #142 mise à jour.' })
+    expect(link).toHaveAttribute('href', '/pull-requests/142?repository=acme%2Fweb-app')
+    // Une activité sans dépôt lié reste du texte simple.
+    expect(screen.getByText('PR sans numéro.').tagName).not.toBe('A')
+  })
+
   it('affiche une erreur exploitable', async () => {
     const { ApiError } = await import('@/services/apiClient')
     vi.mocked(getDashboard).mockRejectedValue(new ApiError('Panne.', 500, 'internal_error'))
 
-    render(<DashboardPage />)
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
   })
@@ -92,7 +127,11 @@ describe('DashboardPage', () => {
       data_source: 'demo',
     })
 
-    render(<DashboardPage />)
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
 
     await waitFor(() => expect(screen.getByText('Dépôts suivis')).toBeInTheDocument())
 
@@ -104,7 +143,11 @@ describe('DashboardPage', () => {
   it('masque les tendances sans historique suffisant', async () => {
     vi.mocked(getDashboard).mockResolvedValue(dashboard)
 
-    render(<DashboardPage />)
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
 
     await waitFor(() => expect(screen.getByText('Dépôts suivis')).toBeInTheDocument())
     expect(screen.queryAllByTestId('sparkline')).toHaveLength(0)

@@ -51,6 +51,7 @@ export interface ActivityItem {
   event_type: string
   message: string
   repository_full_name: string | null
+  pull_request_number: number | null
   occurred_at: string
 }
 

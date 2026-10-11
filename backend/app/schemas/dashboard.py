@@ -29,6 +29,9 @@ class ActivityItem(BaseModel):
     event_type: str
     message: str
     repository_full_name: str | None
+    # Numéro de PR quand l'événement en concerne une : permet au client de
+    # lier l'activité vers la page de détail correspondante.
+    pull_request_number: int | None = None
     occurred_at: datetime
 
 

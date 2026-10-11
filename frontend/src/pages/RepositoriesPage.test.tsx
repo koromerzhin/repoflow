@@ -73,6 +73,26 @@ describe('RepositoriesPage', () => {
     expect(getRepositories).toHaveBeenCalled()
   })
 
+  it('lie chaque dépôt vers ses pull requests et ses issues', async () => {
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+
+    renderPage()
+
+    await waitFor(() => expect(screen.getByText('acme/web-app')).toBeInTheDocument())
+
+    expect(screen.getByRole('link', { name: 'Voir les 3 issues du dépôt' })).toHaveAttribute(
+      'href',
+      '/issues?repository=acme%2Fweb-app',
+    )
+    expect(
+      screen.getByRole('link', { name: 'Voir les 1 pull requests du dépôt' }),
+    ).toHaveAttribute('href', '/pull-requests?repository=acme%2Fweb-app')
+    expect(screen.getByRole('link', { name: 'Voir les 0 issues du dépôt' })).toHaveAttribute(
+      'href',
+      '/issues?repository=acme%2Fbilling',
+    )
+  })
+
   it('affiche un état vide', async () => {
     vi.mocked(getRepositories).mockResolvedValue({ items: [], total: 0, data_source: 'demo' })
 
