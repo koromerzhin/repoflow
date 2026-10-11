@@ -1,11 +1,13 @@
 import { CircleAlert, Gauge, Menu, ShieldCheck, ShieldX } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { Badge } from '@/components/Badge'
 import { Drawer } from '@/components/Drawer'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LanguageSwitcher } from '@/components/LanguageSwitcher'
+import { PageLoader } from '@/components/PageLoader'
 import { Sidebar } from '@/components/Sidebar'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAsync } from '@/hooks/useAsync'
@@ -116,7 +118,11 @@ export function AppLayout() {
           key={location.pathname}
           className="mx-auto max-w-6xl px-4 py-8 focus:outline-none"
         >
-          <Outlet />
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Outlet />
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     </div>

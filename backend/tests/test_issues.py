@@ -77,3 +77,28 @@ def test_issues_recherche_sans_resultat(client: TestClient) -> None:
     payload = _get_issues(client, search="inexistant")
     assert payload["total"] == 0
     assert payload["items"] == []
+
+
+def test_issues_pagination_offset_cursor(client: TestClient) -> None:
+    first = _get_issues(client, limit=3, offset=0)
+    assert len(first["items"]) == 3
+    assert first["total"] == 7
+    assert first["next_cursor"] == 3
+
+    second = _get_issues(client, limit=3, offset=first["next_cursor"])
+    assert len(second["items"]) == 3
+    assert second["next_cursor"] == 6
+
+    third = _get_issues(client, limit=3, offset=second["next_cursor"])
+    assert len(third["items"]) == 1
+    assert third["next_cursor"] is None
+
+    seen = [item["id"] for page in (first, second, third) for item in page["items"]]
+    assert len(seen) == len(set(seen)) == 7
+
+
+def test_issues_pagination_avec_filtre_depot(client: TestClient) -> None:
+    payload = _get_issues(client, repository="acme/api-gateway", limit=1, offset=0)
+    assert payload["total"] == 2
+    assert payload["items"][0]["repository_full_name"] == "acme/api-gateway"
+    assert payload["next_cursor"] == 1

@@ -40,3 +40,7 @@ class IssueListResponse(BaseModel):
     items: list[Issue]
     total: int = Field(ge=0)
     data_source: str
+    next_cursor: int | None = Field(
+        default=None,
+        description="Prochain ``offset`` à passer pour la page suivante, si la liste continue.",
+    )

@@ -150,6 +150,17 @@ def _storage_key(key: tuple[Any, ...]) -> str:
     return _key_prefix + ":".join(str(part) for part in key)
 
 
+async def get_redis_client() -> Any:
+    """Client Redis partagé (cache, limitation de débit).
+
+    Lève si le backend n'est pas ``redis`` ou si la connexion échoue :
+    l'appelant doit prévoir son propre repli.
+    """
+    if _backend() != "redis":
+        raise RuntimeError("Le backend Redis n'est pas activé.")
+    return await _ensure_client()
+
+
 async def _read(key: tuple[Any, ...], codec: Codec | None) -> Any:
     if _redis_ready():
         try:

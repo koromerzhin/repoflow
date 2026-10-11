@@ -9,6 +9,7 @@ export const en = {
     open: 'Open',
     yes: 'yes',
     no: 'no',
+    loadMore: 'Load more',
   },
   nav: {
     main: 'Main navigation',
@@ -36,6 +37,10 @@ export const en = {
   async: {
     errorTitle: 'Loading error',
     empty: 'Nothing to display.',
+  },
+  error: {
+    unexpected: 'An unexpected error occurred.',
+    reload: 'Reload the page',
   },
   api: {
     networkError: 'Cannot reach the RepoFlow server. Check that it is running.',

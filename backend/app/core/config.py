@@ -105,6 +105,9 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = False
     rate_limit_requests: int = Field(default=120, ge=1)
     rate_limit_window_seconds: int = Field(default=60, ge=1)
+    # Backend du limiteur : "memory" (par instance) ou "redis" (partagé,
+    # repli automatique sur mémoire en cas de panne).
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
 
     @field_validator("cors_origins", mode="before")
     @classmethod

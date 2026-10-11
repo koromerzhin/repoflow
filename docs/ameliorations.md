@@ -168,28 +168,28 @@ systématiquement (image +lourde). Supprimer la ligne de syntax, n'installer
 `psycopg` que via un profil ou un build arg, ajouter un utilisateur non-root.
 *Fichier : `backend/Dockerfile`. Effort : S.*
 
-## P2 — Structurants
+## P2 — Structurants — ✅ réalisé le 11/10/2026
 
-### 20. Code splitting des routes
+### 20. ✅ Code splitting des routes
 Toutes les pages sont importées statiquement dans `App.tsx` : un seul bundle
 de ~390 Ko (117 Ko gzip) est téléchargé pour la première page. `React.lazy`
 + `Suspense` par page (le layout reste hors chunk).
 *Fichier : `frontend/src/App.tsx`. Effort : S-M.*
 
-### 21. ErrorBoundary frontend
+### 21. ✅ ErrorBoundary frontend
 Aucune frontière d'erreur : un crash de rendu d'une page blanchit toute
 l'application. Un `ErrorBoundary` autour des routes avec message traduit et
 bouton de rechargement.
 *Fichier : `frontend/src/App.tsx` + `src/i18n`. Effort : S.*
 
-### 22. Tests du worker (couverture 30 %)
+### 22. ✅ Tests du worker (couverture 30 %)
 `app/worker.py` est le moins couvert du backend (`run_once`,
 `_record_snapshot`, `_purge_audit`). Tester une passe complète avec un
 fournisseur factice : analyse, purge d'audit, snapshot, tolérance aux
 erreurs du snapshot.
 *Effort : M.*
 
-### 23. Limiteur de débit distribué
+### 23. ✅ Limiteur de débit distribué
 Le rate limiting (`app/core/security.py`) est en mémoire par instance : sans
 effet en multi-instances et réinitialisé à chaque redémarrage. Même
 problématique que l'ancien cache : brancher un backend Redis optionnel
@@ -197,7 +197,7 @@ problématique que l'ancien cache : brancher un backend Redis optionnel
 mono-instance.
 *Effort : M.*
 
-### 24. Pagination des listes PR/issues
+### 24. ✅ Pagination des listes PR/issues
 Les routes plafonnent à 500 éléments sans pagination côté frontend : au-delà,
 les données sont silencieusement tronquées. Ajouter `offset`/`before_id`
 (curseur déjà prévu pour l'audit) et un chargement progressif (« Charger

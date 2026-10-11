@@ -36,23 +36,25 @@ describe('App', () => {
     }
   })
 
-  it('affiche la page des automatisations', () => {
+  it('affiche la page des automatisations', async () => {
     render(
       <MemoryRouter initialEntries={['/automations']}>
         <App />
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: 'Automatisations' })).toBeInTheDocument()
-    expect(screen.getByText('Garde-fous')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Automatisations' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('Garde-fous')).toBeInTheDocument()
   })
 
-  it('affiche une page 404 pour une route inconnue', () => {
+  it('affiche une page 404 pour une route inconnue', async () => {
     render(
       <MemoryRouter initialEntries={['/inconnue']}>
         <App />
       </MemoryRouter>,
     )
-    expect(screen.getByText('Page introuvable')).toBeInTheDocument()
+    expect(await screen.findByText('Page introuvable')).toBeInTheDocument()
   })
 })

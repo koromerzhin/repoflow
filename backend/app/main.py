@@ -17,9 +17,9 @@ from app.core.logging import configure_logging, get_logger
 from app.core.metrics import MetricsMiddleware
 from app.core.request_context import RequestContextMiddleware
 from app.core.security import (
-    RateLimiter,
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
+    build_rate_limiter,
 )
 from app.db.init_db import create_all
 from app.integrations.github.factory import get_provider
@@ -82,7 +82,8 @@ def create_app() -> FastAPI:
         app.add_middleware(
             RateLimitMiddleware,
             enabled=True,
-            limiter=RateLimiter(
+            limiter=build_rate_limiter(
+                backend=settings.rate_limit_backend,
                 requests=settings.rate_limit_requests,
                 window_seconds=settings.rate_limit_window_seconds,
             ),

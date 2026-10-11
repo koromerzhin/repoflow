@@ -27,6 +27,11 @@ async def pull_requests(
         description="Recherche texte (titre, auteur, numéro, dépôt, branches).",
     ),
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Décalage dans la liste complète (début de page).",
+    ),
     refresh: bool = Query(default=False, description="Ignore le cache et recharge les données."),
 ) -> PullRequestListResponse:
     """Liste des pull requests et de leurs checks CI."""
@@ -37,7 +42,11 @@ async def pull_requests(
         refresh=refresh,
         locale=get_locale(request),
     )
-    return PullRequestListResponse(items=items[:limit], total=len(items), data_source=provider.name)
+    page = items[offset : offset + limit]
+    next_cursor = offset + len(page) if offset + len(page) < len(items) else None
+    return PullRequestListResponse(
+        items=page, total=len(items), data_source=provider.name, next_cursor=next_cursor
+    )
 
 
 @router.get(

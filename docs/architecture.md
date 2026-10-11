@@ -153,12 +153,12 @@ Les middlewares FastAPI sont empilés (du plus interne au plus externe) :
 5. **CORS** (le plus externe) — les réponses d'erreur et de rejet reçoivent
    aussi les en-têtes CORS.
 
-À l'exception de la limitation de débit (mémoire, par processus), ces couches
-sont sans état et conveniennent à une mise à l'échelle horizontale.
+La limitation de débit est en mémoire par défaut (par processus) ; le backend
+Redis optionnel (`REPOFLOW_RATE_LIMIT_BACKEND=redis`, compteur partagé avec
+repli mémoire) rend le reste des couches sans état et compatible avec une mise
+à l'échelle horizontale.
 
 ## Évolutions prévues
 
 - **Webhooks GitHub** : ingestion d'événements en temps réel en complément du
   worker périodique.
-- **Stockage partagé du limiteur de débit** (Redis) pour une mise à l'échelle
-  multi-processus.

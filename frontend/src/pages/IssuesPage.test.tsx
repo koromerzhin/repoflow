@@ -82,6 +82,7 @@ const issues: IssueListResponse = {
   ],
   total: 2,
   data_source: 'demo',
+  next_cursor: null,
 }
 
 function renderPage() {
@@ -111,7 +112,7 @@ describe('IssuesPage', () => {
 
   it('affiche un état vide quand aucune issue ne correspond', async () => {
     vi.mocked(getRepositories).mockResolvedValue(repositories)
-    vi.mocked(getIssues).mockResolvedValue({ items: [], total: 0, data_source: 'demo' })
+    vi.mocked(getIssues).mockResolvedValue({ items: [], total: 0, data_source: 'demo', next_cursor: null })
 
     renderPage()
 
@@ -137,7 +138,7 @@ describe('IssuesPage', () => {
 
     await waitFor(() => {
       expect(getIssues).toHaveBeenLastCalledWith(
-        { state: 'open', search: 'réinitialisation', refresh: false },
+        { state: 'open', search: 'réinitialisation', offset: 0, refresh: false },
         expect.anything(),
       )
     })
@@ -209,5 +210,49 @@ describe('IssuesPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
+  })
+
+  it('charge la page suivante via « Charger plus »', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: IssueListResponse = {
+      items: [
+        {
+          ...issues.items[0],
+          id: 'issue-3',
+          number: 202,
+          title: 'Nouvelle issue paginée',
+        },
+      ],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getIssues)
+      .mockResolvedValueOnce({ ...issues, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('Le lien de réinitialisation expire trop vite'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Nouvelle issue paginée')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Nouvelle issue paginée')).toBeInTheDocument(),
+    )
+    expect(
+      screen.getByText('Le lien de réinitialisation expire trop vite'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Charger plus' })).not.toBeInTheDocument()
+    expect(getIssues).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+      expect.anything(),
+    )
   })
 })

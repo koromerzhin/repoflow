@@ -58,3 +58,31 @@ def test_unknown_check_is_not_treated_as_success(client: TestClient) -> None:
     pr_77 = next(item for item in payload["items"] if item["number"] == 77)
     assert pr_77["checks_state"] == "unknown"
     assert pr_77["merge_eligibility"]["eligible"] is False
+
+
+def test_pull_requests_pagination_offset_cursor(client: TestClient) -> None:
+    first = _get_prs(client, limit=3, offset=0)
+    assert len(first["items"]) == 3
+    assert first["total"] == 7
+    assert first["next_cursor"] == 3
+
+    second = _get_prs(client, limit=3, offset=3)
+    assert len(second["items"]) == 3
+    assert second["next_cursor"] == 6
+
+    third = _get_prs(client, limit=3, offset=6)
+    assert len(third["items"]) == 1
+    assert third["next_cursor"] is None
+
+    seen = [item["id"] for page in (first, second, third) for item in page["items"]]
+    assert len(seen) == len(set(seen)) == 7
+
+
+def test_pull_requests_pagination_derniere_page_reprise_curser(
+    client: TestClient,
+) -> None:
+    base = _get_prs(client, limit=5)
+    assert base["next_cursor"] == 5
+    suite = _get_prs(client, limit=5, offset=base["next_cursor"])
+    assert len(suite["items"]) == 2
+    assert suite["next_cursor"] is None

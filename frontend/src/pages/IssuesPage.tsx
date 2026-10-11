@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
@@ -17,7 +17,12 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useUrlState } from '@/hooks/useUrlState'
 import { formatDateTime } from '@/lib/status'
 import { getIssues, getRepositories } from '@/services/apiClient'
-import type { IssueState } from '@/types/api'
+import type { Issue, IssueState } from '@/types/api'
+
+interface Page {
+  offset: number
+  items: Issue[]
+}
 
 type StateFilter = IssueState | 'all'
 
@@ -43,6 +48,8 @@ export function IssuesPage() {
   const [labelFilter, setLabelFilter] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [milestoneFilter, setMilestoneFilter] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [pages, setPages] = useState<Page[]>([])
   const state: StateFilter = (stateOptions.some((option) => option.value === stateParam)
     ? stateParam
     : 'open') as StateFilter
@@ -55,33 +62,80 @@ export function IssuesPage() {
           repository: repository || undefined,
           state,
           search: query || undefined,
+          offset,
           refresh: options.refresh,
         },
         signal,
       ),
-    [repository, state, query],
+    [repository, state, query, offset],
   )
   useAutoRefresh(issues.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
-  const allItems = useMemo(() => issues.data?.items ?? [], [issues.data])
-  const labelOptions = useMemo(() => distinctSorted(allItems.flatMap((i) => i.labels)), [allItems])
-  const assigneeOptions = useMemo(() => distinctSorted(allItems.flatMap((i) => i.assignees)), [
-    allItems,
+  const response = issues.data
+
+  useEffect(() => {
+    if (!response) {
+      return
+    }
+    /* eslint-disable react-hooks/set-state-in-effect -- accumulation des
+       pages : la réponse courante remplace la page à son offset. */
+    setPages((current) => {
+      const others = current.filter((page) => page.offset !== offset)
+      return [...others, { offset, items: response.items }].sort((a, b) => a.offset - b.offset)
+    })
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [response, offset])
+
+  const loadedItems = useMemo(() => pages.flatMap((page) => page.items), [pages])
+  const nextCursor = response?.next_cursor ?? null
+
+  function changeServerFilter(
+    next: { query?: string; repository?: string; state?: string } = {},
+  ) {
+    const queryValue = next.query ?? query
+    const repositoryValue = next.repository ?? repository
+    const stateValue = next.state ?? state
+    let changed = false
+    if (queryValue !== query) {
+      setQuery(queryValue)
+      changed = true
+    }
+    if (repositoryValue !== repository) {
+      setRepository(repositoryValue)
+      changed = true
+    }
+    if (stateValue !== state) {
+      setStateParam(stateValue)
+      changed = true
+    }
+    if (!changed) {
+      return
+    }
+    setPages([])
+    setOffset(0)
+  }
+
+  const labelOptions = useMemo(() => distinctSorted(loadedItems.flatMap((i) => i.labels)), [
+    loadedItems,
   ])
+  const assigneeOptions = useMemo(
+    () => distinctSorted(loadedItems.flatMap((i) => i.assignees)),
+    [loadedItems],
+  )
   const milestoneOptions = useMemo(
-    () => distinctSorted(allItems.map((i) => i.milestone)),
-    [allItems],
+    () => distinctSorted(loadedItems.map((i) => i.milestone)),
+    [loadedItems],
   )
 
   const filteredItems = useMemo(
     () =>
-      allItems.filter(
+      loadedItems.filter(
         (issue) =>
           (!labelFilter || issue.labels.includes(labelFilter)) &&
           (!assigneeFilter || issue.assignees.includes(assigneeFilter)) &&
           (!milestoneFilter || issue.milestone === milestoneFilter),
       ),
-    [allItems, labelFilter, assigneeFilter, milestoneFilter],
+    [loadedItems, labelFilter, assigneeFilter, milestoneFilter],
   )
 
   const searching = query.trim().length > 0 || labelFilter || assigneeFilter || milestoneFilter
@@ -109,18 +163,18 @@ export function IssuesPage() {
           label={t('filter.search')}
           placeholder={t('filter.searchPlaceholder')}
           value={query}
-          onChange={setQuery}
+          onChange={(value) => changeServerFilter({ query: value })}
         />
         <RepositoryCombobox
           label={t('issues.filterRepository')}
           repositories={repositories.data?.items ?? []}
           value={repository}
-          onChange={setRepository}
+          onChange={(value) => changeServerFilter({ repository: value })}
         />
         <select
           aria-label={t('issues.filterState')}
           value={state}
-          onChange={(event) => setStateParam(event.target.value)}
+          onChange={(event) => changeServerFilter({ state: event.target.value })}
           className="rounded-md border border-slate-700 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
         >
           {stateOptions.map((option) => (
@@ -185,7 +239,7 @@ export function IssuesPage() {
       </p>
 
       <AsyncState
-        loading={issues.loading}
+        loading={issues.loading && filteredItems.length === 0}
         error={issues.error}
         isEmpty={issues.data !== undefined && filteredItems.length === 0}
         emptyMessage={searching ? t('issues.noMatch') : t('issues.empty')}
@@ -247,6 +301,19 @@ export function IssuesPage() {
           ))}
         </ul>
       </AsyncState>
+
+      {nextCursor !== null ? (
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setOffset(nextCursor)}
+            disabled={issues.loading}
+            className="rounded-md border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-600 hover:text-sky-300 focus:border-sky-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {t('common.loadMore')}
+          </button>
+        </div>
+      ) : null}
 
       <p className="mt-6 text-center text-xs text-slate-600">
         {t('issues.footerPrefix')}{' '}

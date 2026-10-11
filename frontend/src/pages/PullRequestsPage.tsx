@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
@@ -17,6 +17,12 @@ import { useUrlState } from '@/hooks/useUrlState'
 import { CheckStateBadge, PullRequestStateBadge, ReviewDecisionBadge } from '@/components/StateBadges'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { getPullRequests, getRepositories } from '@/services/apiClient'
+import type { PullRequest } from '@/types/api'
+
+interface Page {
+  offset: number
+  items: PullRequest[]
+}
 
 export function PullRequestsPage() {
   const { t } = useTranslation()
@@ -24,6 +30,8 @@ export function PullRequestsPage() {
   const [repository, setRepository] = useUrlState('repository', '')
   const [query, setQuery] = useUrlState('q', '')
   const [autoSeconds, setAutoSeconds] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [pages, setPages] = useState<Page[]>([])
 
   const repositories = useAsync(getRepositories, [])
   const pullRequests = useResource(
@@ -32,15 +40,50 @@ export function PullRequestsPage() {
         {
           repository: repository || undefined,
           search: query || undefined,
+          offset,
           refresh: options.refresh,
         },
         signal,
       ),
-    [repository, query],
+    [repository, query, offset],
   )
   useAutoRefresh(pullRequests.refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
 
-  const items = pullRequests.data?.items ?? []
+  const response = pullRequests.data
+
+  useEffect(() => {
+    if (!response) {
+      return
+    }
+    /* eslint-disable react-hooks/set-state-in-effect -- accumulation des
+       pages : la réponse courante remplace la page à son offset. */
+    setPages((current) => {
+      const others = current.filter((page) => page.offset !== offset)
+      return [...others, { offset, items: response.items }].sort((a, b) => a.offset - b.offset)
+    })
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [response, offset])
+
+  const items = useMemo(() => pages.flatMap((page) => page.items), [pages])
+  const nextCursor = response?.next_cursor ?? null
+
+  function changeFilter(queryValue: string, repositoryValue: string) {
+    let changed = false
+    if (queryValue !== query) {
+      setQuery(queryValue)
+      changed = true
+    }
+    if (repositoryValue !== repository) {
+      setRepository(repositoryValue)
+      changed = true
+    }
+    if (!changed) {
+      return
+    }
+    setPages([])
+    setOffset(0)
+  }
+
   const searching = query.trim().length > 0
   const visibility = useMemo(
     () =>
@@ -66,13 +109,13 @@ export function PullRequestsPage() {
           label={t('filter.search')}
           placeholder={t('filter.searchPlaceholder')}
           value={query}
-          onChange={setQuery}
+          onChange={(value) => changeFilter(value, repository)}
         />
         <RepositoryCombobox
           label={t('pr.filterRepository')}
           repositories={repositories.data?.items ?? []}
           value={repository}
-          onChange={setRepository}
+          onChange={(value) => changeFilter(query, value)}
         />
         <div className="ml-auto flex items-center gap-2">
           <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
@@ -85,7 +128,7 @@ export function PullRequestsPage() {
       </p>
 
       <AsyncState
-        loading={pullRequests.loading}
+        loading={pullRequests.loading && items.length === 0}
         error={pullRequests.error}
         isEmpty={pullRequests.data !== undefined && items.length === 0}
         emptyMessage={searching ? t('pr.noMatch') : t('pr.empty')}
@@ -191,6 +234,19 @@ export function PullRequestsPage() {
           ))}
         </div>
       </AsyncState>
+
+      {nextCursor !== null ? (
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setOffset(nextCursor)}
+            disabled={pullRequests.loading}
+            className="rounded-md border border-slate-700 bg-slate-900 px-4 py-2 text-sm text-slate-100 transition hover:border-sky-600 hover:text-sky-300 focus:border-sky-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {t('common.loadMore')}
+          </button>
+        </div>
+      ) : null}
 
       <p className="mt-6 text-center text-xs text-slate-600">
         {t('pr.footerPrefix')}{' '}

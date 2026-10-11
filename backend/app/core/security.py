@@ -1,18 +1,25 @@
 """Durcissement sécurité : en-têtes HTTP et limitation de débit.
 
 En-têtes : posture restrictive sur les réponses API (aucune exécution, pas de
-navigation par *frame*). Limitation de débit : fenêtre fixe en mémoire, fondée
-sur l'adresse IP du client.
+navigation par *frame*). Limitation de débit : fenêtre fixe fondée sur
+l'adresse IP du client, en mémoire (par instance) ou distribuée via Redis
+(``REPOFLOW_RATE_LIMIT_BACKEND=redis``) avec repli automatique sur mémoire
+en cas de panne.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi.responses import JSONResponse
 from starlette.datastructures import MutableHeaders
+
+from app.core.cache import get_redis_client
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _DEFAULT_API_CSP = "default-src 'none'; frame-ancestors 'none'"
 
@@ -74,7 +81,7 @@ class RateLimiter:
         self.window_seconds = window_seconds
         self._buckets: dict[str, tuple[float, int]] = {}
 
-    def allow(self, key: str) -> bool:
+    async def allow(self, key: str) -> bool:
         """Autorise la requête si le seuil de la fenêtre n'est pas atteint."""
         now = time.monotonic()
         window_start, count = self._buckets.get(key, (0.0, 0))
@@ -86,7 +93,7 @@ class RateLimiter:
         self._buckets[key] = (window_start, count + 1)
         return True
 
-    def remaining(self, key: str) -> int:
+    async def remaining(self, key: str) -> int:
         """Retourne le nombre de requêtes encore autorisées dans la fenêtre."""
         now = time.monotonic()
         window_start, count = self._buckets.get(key, (0.0, 0))
@@ -97,6 +104,69 @@ class RateLimiter:
     def reset(self) -> None:
         """Vide l'état du limiteur (tests et rotation)."""
         self._buckets.clear()
+
+
+class RedisRateLimiter:
+    """Limiteur de débit distribué (``INCR`` + ``EXPIRE``).
+
+    Compteur partagé entre instances. Toute erreur Redis replie sur le
+    limiteur mémoire local : une panne du backend ne bloque jamais les
+    requêtes.
+    """
+
+    _key_prefix = "repoflow:ratelimit:"
+
+    def __init__(
+        self,
+        *,
+        requests: int,
+        window_seconds: int,
+        client_factory: Callable[[], Awaitable[Any]] = get_redis_client,
+    ) -> None:
+        self.requests = requests
+        self.window_seconds = window_seconds
+        self._client_factory = client_factory
+        self._fallback = RateLimiter(requests=requests, window_seconds=window_seconds)
+
+    async def allow(self, key: str) -> bool:
+        try:
+            client = await self._client_factory()
+            count = await client.incr(self._key_prefix + key)
+            if count == 1:
+                await client.expire(self._key_prefix + key, self.window_seconds)
+            return int(count) <= self.requests
+        except Exception as cause:
+            logger.warning(
+                "Limiteur Redis indisponible (%s) ; repli mémoire.",
+                type(cause).__name__,
+            )
+            return await self._fallback.allow(key)
+
+    async def remaining(self, key: str) -> int:
+        try:
+            client = await self._client_factory()
+            raw = await client.get(self._key_prefix + key)
+            count = int(raw) if raw else 0
+            return max(0, self.requests - count)
+        except Exception as cause:
+            logger.warning(
+                "Limiteur Redis indisponible (%s) ; repli mémoire.",
+                type(cause).__name__,
+            )
+            return await self._fallback.remaining(key)
+
+    def reset(self) -> None:
+        """Vide uniquement le repli mémoire (tests)."""
+        self._fallback.reset()
+
+
+def build_rate_limiter(
+    *, backend: str, requests: int, window_seconds: int
+) -> RateLimiter | RedisRateLimiter:
+    """Construit le limiteur selon le backend configuré."""
+    if backend == "redis":
+        return RedisRateLimiter(requests=requests, window_seconds=window_seconds)
+    return RateLimiter(requests=requests, window_seconds=window_seconds)
 
 
 class RateLimitMiddleware:
@@ -128,7 +198,7 @@ class RateLimitMiddleware:
             return
 
         key = self._client_key(scope)
-        if not self._limiter.allow(key):
+        if not await self._limiter.allow(key):
             response = JSONResponse(
                 status_code=429,
                 content={

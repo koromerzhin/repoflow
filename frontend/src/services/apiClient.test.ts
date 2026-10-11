@@ -153,6 +153,22 @@ describe('apiClient', () => {
     )
   })
 
+  it('transmet l’offset de pagination dans la requête', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getPullRequests({ offset: 100 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/pull-requests?offset=100',
+      expect.anything(),
+    )
+  })
+
   it('construit l’URL du détail de pull request', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockResolvedValue(

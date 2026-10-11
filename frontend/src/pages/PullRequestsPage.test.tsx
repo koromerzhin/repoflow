@@ -146,6 +146,7 @@ const pullRequests: PullRequestListResponse = {
   ],
   total: 2,
   data_source: 'demo',
+  next_cursor: null,
 }
 
 function renderPage() {
@@ -216,7 +217,7 @@ describe('PullRequestsPage', () => {
 
     await waitFor(() =>
       expect(getPullRequests).toHaveBeenLastCalledWith(
-        { repository: 'acme/web-app', refresh: false },
+        { repository: 'acme/web-app', offset: 0, refresh: false },
         expect.anything(),
       ),
     )
@@ -237,7 +238,7 @@ describe('PullRequestsPage', () => {
 
     await waitFor(() => {
       expect(getPullRequests).toHaveBeenLastCalledWith(
-        { search: 'facturation', refresh: false },
+        { search: 'facturation', offset: 0, refresh: false },
         expect.anything(),
       )
     })
@@ -283,7 +284,7 @@ describe('PullRequestsPage', () => {
 
   it('affiche un état vide', async () => {
     vi.mocked(getRepositories).mockResolvedValue(repositories)
-    vi.mocked(getPullRequests).mockResolvedValue({ items: [], total: 0, data_source: 'demo' })
+    vi.mocked(getPullRequests).mockResolvedValue({ items: [], total: 0, data_source: 'demo', next_cursor: null })
 
     renderPage()
 
@@ -300,5 +301,83 @@ describe('PullRequestsPage', () => {
     renderPage()
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Panne.'))
+  })
+
+  it('charge la page suivante via « Charger plus »', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: PullRequestListResponse = {
+      items: [
+        {
+          ...pullRequests.items[0],
+          id: 'pr-4',
+          number: 145,
+          title: 'Nouvelle fonctionnalité',
+        },
+      ],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getPullRequests)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Nouvelle fonctionnalité')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+
+    await waitFor(() =>
+      expect(screen.getByText('Nouvelle fonctionnalité')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Charger plus' })).not.toBeInTheDocument()
+    expect(getPullRequests).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: 2 }),
+      expect.anything(),
+    )
+  })
+
+  it('réinitialise la pagination quand le filtre change', async () => {
+    const user = userEvent.setup()
+    vi.mocked(getRepositories).mockResolvedValue(repositories)
+    const page2: PullRequestListResponse = {
+      items: [{ ...pullRequests.items[0], id: 'pr-4', number: 145, title: 'Page deux' }],
+      total: 3,
+      data_source: 'demo',
+      next_cursor: null,
+    }
+    vi.mocked(getPullRequests)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: 2 })
+      .mockResolvedValueOnce(page2)
+      .mockResolvedValueOnce({ ...pullRequests, next_cursor: null })
+
+    renderPage()
+
+    await waitFor(() =>
+      expect(screen.getByText('Refonte du module de facturation')).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Charger plus' }))
+    await waitFor(() =>
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 2 }),
+        expect.anything(),
+      ),
+    )
+
+    await user.type(screen.getByRole('searchbox'), 'facturation')
+
+    await waitFor(() =>
+      expect(getPullRequests).toHaveBeenLastCalledWith(
+        { search: 'facturation', offset: 0, refresh: false },
+        expect.anything(),
+      ),
+    )
   })
 })

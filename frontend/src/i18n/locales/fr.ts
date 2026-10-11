@@ -9,6 +9,7 @@ export const fr = {
     open: 'Ouvrir',
     yes: 'oui',
     no: 'non',
+    loadMore: 'Charger plus',
   },
   nav: {
     main: 'Navigation principale',
@@ -36,6 +37,10 @@ export const fr = {
   async: {
     errorTitle: 'Erreur de chargement',
     empty: 'Aucune donnée à afficher.',
+  },
+  error: {
+    unexpected: 'Une erreur inattendue est survenue.',
+    reload: 'Recharger la page',
   },
   api: {
     networkError: 'Impossible de contacter le serveur RepoFlow. Vérifiez qu\u2019il est démarré.',

@@ -26,6 +26,11 @@ async def issues(
         description="Recherche texte (titre, auteur, numéro, libellés, assignés, jalon).",
     ),
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Décalage dans la liste complète (début de page).",
+    ),
     refresh: bool = Query(default=False, description="Ignore le cache et recharge les données."),
 ) -> IssueListResponse:
     """Liste des issues GitHub, hors pull requests."""
@@ -37,4 +42,8 @@ async def issues(
         search=search,
         refresh=refresh,
     )
-    return IssueListResponse(items=items[:limit], total=len(items), data_source=provider.name)
+    page = items[offset : offset + limit]
+    next_cursor = offset + len(page) if offset + len(page) < len(items) else None
+    return IssueListResponse(
+        items=page, total=len(items), data_source=provider.name, next_cursor=next_cursor
+    )

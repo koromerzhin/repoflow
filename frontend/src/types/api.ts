@@ -128,6 +128,7 @@ export interface PullRequestListResponse {
   items: PullRequest[]
   total: number
   data_source: DataSource
+  next_cursor: number | null
 }
 
 export type ReviewState =
@@ -191,6 +192,7 @@ export interface IssueListResponse {
   items: Issue[]
   total: number
   data_source: DataSource
+  next_cursor: number | null
 }
 
 export interface AutomationRule {

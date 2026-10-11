@@ -149,12 +149,12 @@ export function getRepositories(
 }
 
 export function getPullRequests(
-  params: { repository?: string; search?: string } & Refreshable = {},
+  params: { repository?: string; search?: string; offset?: number } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<PullRequestListResponse> {
   return request<PullRequestListResponse>(
     `/v1/pull-requests${buildQuery(
-      { repository: params.repository, search: params.search },
+      { repository: params.repository, search: params.search, offset: params.offset?.toString() },
       params.refresh,
     )}`,
     { signal },
@@ -166,6 +166,7 @@ export function getIssues(
     repository?: string
     state?: 'open' | 'closed' | 'all'
     search?: string
+    offset?: number
   } & Refreshable = {},
   signal?: AbortSignal,
 ): Promise<IssueListResponse> {
@@ -175,6 +176,7 @@ export function getIssues(
         repository: params.repository,
         state: params.state,
         search: params.search,
+        offset: params.offset?.toString(),
       },
       params.refresh,
     )}`,
