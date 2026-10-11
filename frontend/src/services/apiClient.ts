@@ -16,6 +16,7 @@ import type {
   RepositoryConfigListResponse,
   RepositoryConfigUpdate,
   RepositoryListResponse,
+  SnapshotListResponse,
 } from '@/types/api'
 import type { TFunction } from 'i18next'
 
@@ -192,6 +193,23 @@ export function getPullRequestDetail(
 ): Promise<PullRequestDetail> {
   return request<PullRequestDetail>(
     `/v1/pull-requests/${number}${buildQuery({ repository }, options.refresh)}`,
+    { signal },
+  )
+}
+
+export function getSnapshots(
+  params: { repository?: string; since?: string; limit?: number } & Refreshable = {},
+  signal?: AbortSignal,
+): Promise<SnapshotListResponse> {
+  return request<SnapshotListResponse>(
+    `/v1/snapshots${buildQuery(
+      {
+        repository: params.repository,
+        since: params.since,
+        limit: params.limit?.toString(),
+      },
+      params.refresh,
+    )}`,
     { signal },
   )
 }

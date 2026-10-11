@@ -206,11 +206,17 @@ plus » ou infini scroll) dans les listes.
 
 ## P3 — Long terme
 
-### 25. Visualisation des snapshots
+### 25. ✅ Visualisation des snapshots — réalisé le 11/10/2026
 `daily_snapshots` est persisté et exposé (`GET /api/v1/snapshots`) mais rien
 ne l'affiche. Un graphique d'évolution (sparkline SVG sans dépendance, ou
 librairie légère) sur le tableau de bord par compteur.
 *Effort : M.*
+
+*Réalisé* : composant `Sparkline` (SVG pur, `frontend/src/components/`),
+client `getSnapshots`, agrégation quotidienne (`frontend/src/lib/snapshots.ts`)
+et branchement d'une tendance sur chaque carte du tableau de bord (fenêtre de
+30 jours). La sparkline reste masquée tant que l'historique compte moins de
+deux points (worker désactivé par défaut, aucun seed en mode démo).
 
 ### 26. CI : build Docker et dépendances
 La CI teste le code mais jamais les images Docker (le build a déjà échoué en

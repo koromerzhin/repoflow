@@ -11,6 +11,7 @@ import {
   getIssues,
   getPullRequestDetail,
   getPullRequests,
+  getSnapshots,
   setKillSwitch,
   updateRule,
 } from '@/services/apiClient'
@@ -181,6 +182,22 @@ describe('apiClient', () => {
     await getPullRequestDetail(142, 'acme/web-app')
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/pull-requests/142?repository=acme%2Fweb-app',
+      expect.anything(),
+    )
+  })
+
+  it('construit les filtres de la requête snapshots', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], total: 0, data_source: 'demo' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    await getSnapshots({ repository: 'acme/web-app', since: '2026-01-01', limit: 500 })
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/snapshots?repository=acme%2Fweb-app&since=2026-01-01&limit=500',
       expect.anything(),
     )
   })

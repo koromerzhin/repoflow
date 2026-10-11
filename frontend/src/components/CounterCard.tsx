@@ -1,11 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
 
+import { Sparkline } from '@/components/Sparkline'
+
 interface CounterCardProps {
   label: string
   value: number
   icon: LucideIcon
   accent?: string
   hint?: string
+  trend?: number[]
+  trendLabel?: string
 }
 
 export function CounterCard({
@@ -14,6 +18,8 @@ export function CounterCard({
   icon: Icon,
   accent = 'text-sky-400',
   hint,
+  trend,
+  trendLabel,
 }: CounterCardProps) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
@@ -23,6 +29,13 @@ export function CounterCard({
       </div>
       <p className="mt-3 text-3xl font-semibold tabular-nums text-slate-50">{value}</p>
       {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+      {trend ? (
+        <Sparkline
+          values={trend}
+          label={trendLabel ?? label}
+          className={`mt-3 h-7 w-full ${accent}`}
+        />
+      ) : null}
     </div>
   )
 }

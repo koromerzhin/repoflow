@@ -195,6 +195,24 @@ export interface IssueListResponse {
   next_cursor: number | null
 }
 
+export interface Snapshot {
+  id: number
+  repository_full_name: string
+  snapshot_date: string
+  data_source: DataSource
+  open_pull_requests: number
+  pull_requests_ready_to_merge: number
+  pull_requests_with_failing_checks: number
+  pull_requests_pending_checks: number
+  open_issues: number
+}
+
+export interface SnapshotListResponse {
+  items: Snapshot[]
+  total: number
+  data_source: DataSource
+}
+
 export interface AutomationRule {
   id: number
   repository_id: number

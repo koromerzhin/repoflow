@@ -6,7 +6,7 @@ import {
   GitPullRequest,
   XCircle,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { AsyncState } from '@/components/AsyncState'
@@ -16,9 +16,18 @@ import { PageHeader } from '@/components/PageHeader'
 import { RefreshButton } from '@/components/RefreshButton'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
-import { useResource } from '@/hooks/useAsync'
+import { useAsync, useResource } from '@/hooks/useAsync'
+import { aggregateSnapshots, seriesFor } from '@/lib/snapshots'
 import { formatDateTime } from '@/lib/status'
-import { getDashboard } from '@/services/apiClient'
+import { getDashboard, getSnapshots } from '@/services/apiClient'
+
+const TREND_WINDOW_DAYS = 30
+
+function trendSince(days: number): string {
+  const date = new Date()
+  date.setUTCDate(date.getUTCDate() - (days - 1))
+  return date.toISOString().slice(0, 10)
+}
 
 export function DashboardPage() {
   const { t } = useTranslation()
@@ -28,8 +37,27 @@ export function DashboardPage() {
     (options, signal) => getDashboard(signal, { refresh: options.refresh }),
     [],
   )
-  useAutoRefresh(refresh, autoSeconds > 0 ? autoSeconds * 1000 : null)
+
+  const since = useMemo(() => trendSince(TREND_WINDOW_DAYS), [])
+  const snapshots = useAsync(
+    (signal) => getSnapshots({ since, limit: 500 }, signal),
+    [since],
+  )
+  const trend = useMemo(
+    () => aggregateSnapshots(snapshots.data?.items ?? []),
+    [snapshots.data],
+  )
+
+  const reloadSnapshots = snapshots.reload
+  const refreshAll = useCallback(() => {
+    refresh()
+    reloadSnapshots()
+  }, [refresh, reloadSnapshots])
+
+  useAutoRefresh(refreshAll, autoSeconds > 0 ? autoSeconds * 1000 : null)
   const counters = data?.counters
+  const trendLabel = (counter: string) =>
+    t('dashboard.trendAria', { counter, days: TREND_WINDOW_DAYS })
 
   return (
     <div>
@@ -39,7 +67,7 @@ export function DashboardPage() {
         actions={
           <div className="flex items-center gap-2">
             <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
-            <RefreshButton onClick={refresh} loading={loading} />
+            <RefreshButton onClick={refreshAll} loading={loading} />
           </div>
         }
       />
@@ -52,12 +80,16 @@ export function DashboardPage() {
               value={counters.repositories}
               icon={FolderGit2}
               accent="text-sky-400"
+              trend={seriesFor(trend, 'repositories')}
+              trendLabel={trendLabel(t('dashboard.counters.repositories'))}
             />
             <CounterCard
               label={t('dashboard.counters.openPullRequests')}
               value={counters.open_pull_requests}
               icon={GitPullRequest}
               accent="text-indigo-400"
+              trend={seriesFor(trend, 'open_pull_requests')}
+              trendLabel={trendLabel(t('dashboard.counters.openPullRequests'))}
             />
             <CounterCard
               label={t('dashboard.counters.readyToMerge')}
@@ -65,24 +97,32 @@ export function DashboardPage() {
               icon={GitMerge}
               accent="text-emerald-400"
               hint={t('dashboard.counters.readyToMergeHint')}
+              trend={seriesFor(trend, 'pull_requests_ready_to_merge')}
+              trendLabel={trendLabel(t('dashboard.counters.readyToMerge'))}
             />
             <CounterCard
               label={t('dashboard.counters.failingChecks')}
               value={counters.pull_requests_with_failing_checks}
               icon={XCircle}
               accent="text-red-400"
+              trend={seriesFor(trend, 'pull_requests_with_failing_checks')}
+              trendLabel={trendLabel(t('dashboard.counters.failingChecks'))}
             />
             <CounterCard
               label={t('dashboard.counters.pendingChecks')}
               value={counters.pull_requests_pending_checks}
               icon={CircleDashed}
               accent="text-amber-400"
+              trend={seriesFor(trend, 'pull_requests_pending_checks')}
+              trendLabel={trendLabel(t('dashboard.counters.pendingChecks'))}
             />
             <CounterCard
               label={t('dashboard.counters.openIssues')}
               value={counters.open_issues}
               icon={CheckCircle2}
               accent="text-slate-300"
+              trend={seriesFor(trend, 'open_issues')}
+              trendLabel={trendLabel(t('dashboard.counters.openIssues'))}
             />
           </div>
         ) : null}
