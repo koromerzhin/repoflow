@@ -13,14 +13,17 @@
       ;(function () {
         try {
           var stored = localStorage.getItem('repoflow-theme')
+          if (stored === 'light' || stored === 'dark') {
+            if (stored === 'light') {
+              document.documentElement.classList.add('theme-light')
+            }
+            return
+          }
           var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
-          var theme = stored === 'light' || stored === 'dark' ? stored : prefersLight ? 'light' : 'dark'
-          if (theme === 'light') {
+          if (prefersLight) {
             document.documentElement.classList.add('theme-light')
           }
-        } catch (error) {
-          // Préférences indisponibles : le thème sombre reste appliqué.
-        }
+        } catch (error) {}
       })()
     </script>
   </head>
