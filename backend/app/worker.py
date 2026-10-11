@@ -23,7 +23,8 @@ from app.core.logging import configure_logging, get_logger
 from app.db.init_db import create_all
 from app.db.session import get_session_factory
 from app.integrations.github.factory import get_provider
-from app.services import audit_service
+from app.integrations.github.provider import Provider
+from app.services import audit_service, snapshot_service
 from app.services.analysis_service import run_analysis
 
 logger = get_logger(__name__)
@@ -43,6 +44,7 @@ async def run_once() -> None:
             summary.merged,
         )
         _purge_audit(session, settings.audit_retention_days)
+        await _record_snapshot(session, provider)
     finally:
         session.close()
 
@@ -55,6 +57,15 @@ def _purge_audit(session: Session, retention_days: int) -> None:
     if purged:
         session.commit()
         logger.info("Rétention d'audit : %s entrée(s) supprimée(s).", purged)
+
+
+async def _record_snapshot(session: Session, provider: Provider) -> None:
+    """Persiste l'agrégat quotidien du jour ; n'interrompt jamais l'analyse."""
+    try:
+        covered = await snapshot_service.record_daily_snapshot(session, provider)
+        logger.info("Snapshot quotidien : %s dépôt(s).", covered)
+    except Exception:
+        logger.exception("Échec de l'enregistrement du snapshot quotidien.")
 
 
 async def run_forever(interval_seconds: int | None = None) -> None:

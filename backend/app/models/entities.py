@@ -1,15 +1,25 @@
 """Modèles ORM de RepoFlow.
 
 Ces tables stockent la configuration locale (dépôts suivis, règles
-d'automatisation) et l'historique d'audit. Les données GitHub elles-mêmes
-ne sont pas persistées dans cette première version.
+d'automatisation), l'historique d'audit et les agrégats quotidiens. Les
+données GitHub détaillées ne sont pas persistées : seuls des agrégats par
+dépôt le sont, pour suivre leur évolution.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -84,3 +94,31 @@ class SystemSetting(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class DailySnapshot(TimestampMixin, Base):
+    """Agrégat quotidien par dépôt, alimenté par le worker.
+
+    Une seule ligne par dépôt et par jour (UTC) : la passe du worker met à
+    jour la ligne du jour au lieu d'en créer une nouvelle. Aucune donnée
+    GitHub détaillée n'est copiée, seulement les compteurs.
+    """
+
+    __tablename__ = "daily_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "repository_full_name", "snapshot_date", name="uq_daily_snapshots_repo_date"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    repository_full_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    data_source: Mapped[str] = mapped_column(String(50), nullable=False, default="demo")
+    open_pull_requests: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pull_requests_ready_to_merge: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    pull_requests_with_failing_checks: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    pull_requests_pending_checks: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    open_issues: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

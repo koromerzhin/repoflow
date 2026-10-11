@@ -37,6 +37,7 @@ def _clean_tables() -> Iterator[None]:
     from app.models.entities import (
         AuditEvent,
         AutomationRule,
+        DailySnapshot,
         RepositoryConfig,
         SystemSetting,
     )
@@ -44,7 +45,7 @@ def _clean_tables() -> Iterator[None]:
     create_all()
     session = get_session_factory()()
     try:
-        for model in (AuditEvent, AutomationRule, RepositoryConfig, SystemSetting):
+        for model in (AuditEvent, AutomationRule, RepositoryConfig, SystemSetting, DailySnapshot):
             session.execute(delete(model))
         session.commit()
     finally:

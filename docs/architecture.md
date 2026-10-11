@@ -117,7 +117,11 @@ et distingue systématiquement les états de **chargement**, d'**erreur**, de
   `postgresql+psycopg://…`).
 - Migrations gérées par **Alembic** (`backend/alembic/`).
 - Tables : `repository_configs`, `automation_rules`, `audit_events`,
-  `system_settings`.
+  `system_settings`, `daily_snapshots`.
+- `daily_snapshots` (alimentée par le worker) : un agrégat quotidien par
+  dépôt (PR ouvertes, prêtes à fusionner, checks en échec/en cours, issues
+  ouvertes), consultable via `GET /api/v1/snapshots`. Aucune donnée GitHub
+  détaillée n'est persistée.
 - Le moteur SQLAlchemy ajuste ses options selon le dialecte : SQLite
   (`check_same_thread=False`), autres bases (`pool_pre_ping`, taille de pool
   configurables via `REPOFLOW_DB_POOL_*`).

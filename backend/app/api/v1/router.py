@@ -12,6 +12,7 @@ from app.api.v1.routes import (
     issues,
     pull_requests,
     repositories,
+    snapshots,
 )
 
 api_v1_router = APIRouter()
@@ -22,3 +23,4 @@ api_v1_router.include_router(issues.router)
 api_v1_router.include_router(configs.router)
 api_v1_router.include_router(automation.router)
 api_v1_router.include_router(audit.router)
+api_v1_router.include_router(snapshots.router)

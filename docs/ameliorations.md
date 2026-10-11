@@ -58,13 +58,16 @@ sur `GET /v1/pull-requests` et `/v1/issues` (filtrage dans `data_service`,
 documenté dans le contrat `Provider`) pour préparer les gros volumes.
 *Effort : M.*
 
-### 8. Historisation légère des données
+### 8. ✅ Historisation légère des données
 Les données GitHub ne sont pas persistées (choix documenté). Pour suivre
 l'évolution (temps de fusion, taux d'échec des checks), ajouter un snapshot
 quotidien agrégé par dépôt (compteurs PR/checks/issues) dans une table
 `daily_snapshots`, alimenté par le worker. Pas de copie exhaustive : juste les
 agrégats du dashboard.
-*Effort : M.*
+*Effort : M.* ✅ Implémenté : table `daily_snapshots` (une ligne par dépôt et
+par jour, mise à jour par le worker), service dédié réutilisant les compteurs
+du dashboard, route `GET /api/v1/snapshots` (filtres `repository`/`since`).
+Une visualisation graphique côté frontend reste possible plus tard.
 
 ### 9. ✅ Tests E2E (Playwright)
 La CI couvre lint + tests unitaires, aucun parcours de bout en bout. Ajouter

@@ -64,6 +64,10 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 - Suivi du quota GitHub : dernier état `X-RateLimit-*` observé exposé par
   `GET /api/health` (`github_rate_limit`) et badge d'avertissement dans
   l'interface quand le quota restant est bas.
+- **Historisation quotidienne** : le worker persiste un agrégat par dépôt et
+  par jour dans `daily_snapshots` (PR ouvertes, prêtes à fusionner, checks
+  en échec/en cours, issues ouvertes), consultable via
+  `GET /api/v1/snapshots`.
 - Interface React sombre, **bilingue français / anglais** (détection du
   navigateur, bascule manuelle persistée, `?lang=en`), responsive :
   navigation, tableau de bord, dépôts, pull requests, détail de PR, issues,
