@@ -69,6 +69,24 @@ def test_readiness_ok(client: TestClient) -> None:
     assert payload["database"] == "ok"
     assert payload["cache"] == "memory"
     assert payload["provider"] == "demo"
+    assert payload["github_rate_limit"] is None
+
+
+def test_readiness_expose_quota_github(client: TestClient) -> None:
+    ratelimit.reset()
+    ratelimit.update(remaining=42, limit=5000, reset_at=1_700_000_000)
+    app.dependency_overrides[get_provider] = lambda: _StubGithubProvider()
+    try:
+        payload = client.get("/api/health/ready").json()
+    finally:
+        app.dependency_overrides.clear()
+        ratelimit.reset()
+
+    quota = payload["github_rate_limit"]
+    assert quota is not None
+    assert quota["remaining"] == 42
+    assert quota["limit"] == 5000
+    assert quota["reset_at"] is not None
 
 
 def test_readiness_ko_si_base_indisponible(client: TestClient, monkeypatch) -> None:

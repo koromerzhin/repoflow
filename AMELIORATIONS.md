@@ -39,13 +39,13 @@ documenté.
 
 ## P1 — Court terme (forte valeur, faible effort)
 
-### 4. Visibilité du quota GitHub
-Les réponses GitHub portent `x-ratelimit-remaining`/`x-ratelimit-reset` ; le
-backend les subit (épisodes de 429/503) sans les exposer. Les enregistrer et
-les remonter dans `/api/health/ready` et un badge UI (« quota : 3 200/5 000,
-réinitialisation 14 h 02 »), avec alerte sous un seuil.
-*Fichiers : `integrations/github/client.py`, `routes/health.py`,
-`schemas/health.py`, `frontend` (DashboardPage). Effort : S-M.*
+### 4. ~~Visibilité du quota GitHub~~ ✅
+Réalisé : le client enregistre les en-têtes `X-RateLimit-*` après chaque
+réponse, `/api/health` et `/api/health/ready` exposent le quota observé
+(remaining/limit/reset), le tableau de bord affiche un badge permanent
+(`Quota GitHub : 4 123 / 5 000 requêtes · réinitialisation 14 h 02`,
+vert > 20 %, jaune ≤ 20 %, rouge ≤ 5 %) et l'en-tête global garde une alerte
+sous 100 requêtes restantes.
 
 ### 5. Verrou distribué du worker
 `run_forever` démarre dans chaque réplique : deux instances peuvent exécuter

@@ -43,6 +43,10 @@ class ReadinessResponse(BaseModel):
     database: DatabaseStatus
     cache: str = Field(description="Backend de cache actif (memory, redis).")
     provider: str = Field(description="Fournisseur de données actif (demo, github).")
+    github_rate_limit: GitHubRateLimitStatus | None = Field(
+        default=None,
+        description="Dernier quota GitHub observé ; null en mode démonstration.",
+    )
 
 
 class HealthResponse(BaseModel):

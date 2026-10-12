@@ -99,6 +99,7 @@ async def readiness(settings: SettingsDep, provider: ProviderDep) -> JSONRespons
         database=db_status,
         cache=cache_status,
         provider=provider.name,
+        github_rate_limit=_github_rate_limit_status(provider.name),
     )
     return JSONResponse(
         status_code=200 if ready else 503,

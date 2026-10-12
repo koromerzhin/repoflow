@@ -116,6 +116,9 @@ export const fr = {
     description:
       'Vue synthétique des dépôts suivis, des pull requests et de l\'état des checks CI.',
     recentActivity: 'Activité récente',
+    quotaLabel: 'Quota GitHub',
+    quotaValue: '{{remaining}} / {{limit}} requêtes',
+    quotaReset: 'réinitialisation {{time}}',
     trendAria: 'Évolution sur les {{days}} derniers jours — {{counter}}',
     counters: {
       repositories: 'Dépôts suivis',

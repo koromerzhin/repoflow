@@ -8,6 +8,8 @@ test('le tableau de bord affiche les compteurs et le bandeau démo', async ({ pa
   await expect(page.getByText(/Mode démonstration/)).toBeVisible()
   await expect(page.getByText('Dépôts suivis', { exact: true })).toBeVisible()
   await expect(page.getByText('Activité récente')).toBeVisible()
+  // En mode démonstration, aucun quota GitHub n'est exposé.
+  await expect(page.getByTestId('github-quota')).toHaveCount(0)
 })
 
 test('les activités récentes mènent au détail de la pull request', async ({ page }) => {

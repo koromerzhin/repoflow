@@ -115,6 +115,9 @@ export const en = {
     title: 'Dashboard',
     description: 'Overview of tracked repositories, pull requests and CI check status.',
     recentActivity: 'Recent activity',
+    quotaLabel: 'GitHub quota',
+    quotaValue: '{{remaining}} / {{limit}} requests',
+    quotaReset: 'resets at {{time}}',
     trendAria: 'Trend over the last {{days}} days — {{counter}}',
     counters: {
       repositories: 'Tracked repositories',

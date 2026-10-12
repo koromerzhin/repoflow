@@ -3,13 +3,25 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { DashboardPage } from '@/pages/DashboardPage'
-import { getDashboard, getSnapshots } from '@/services/apiClient'
-import type { DashboardResponse, SnapshotListResponse } from '@/types/api'
+import { getDashboard, getHealth, getSnapshots } from '@/services/apiClient'
+import type { DashboardResponse, HealthResponse, SnapshotListResponse } from '@/types/api'
 
 vi.mock('@/services/apiClient', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/services/apiClient')>()
-  return { ...actual, getDashboard: vi.fn(), getSnapshots: vi.fn() }
+  return { ...actual, getDashboard: vi.fn(), getSnapshots: vi.fn(), getHealth: vi.fn() }
 })
+
+const healthDemo: HealthResponse = {
+  status: 'ok',
+  app: 'RepoFlow',
+  version: '0.1.0',
+  environment: 'test',
+  timestamp: '2026-01-01T10:00:00Z',
+  data_source: 'demo',
+  database: 'ok',
+  kill_switch_engaged: false,
+  github_rate_limit: null,
+}
 
 const dashboard: DashboardResponse = {
   generated_at: '2026-01-01T10:00:00Z',
@@ -48,6 +60,66 @@ const emptySnapshots: SnapshotListResponse = { items: [], total: 0, data_source:
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.mocked(getSnapshots).mockResolvedValue(emptySnapshots)
+    vi.mocked(getHealth).mockResolvedValue(healthDemo)
+  })
+
+  it('affiche le quota GitHub quand le fournisseur en expose un', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(dashboard)
+    vi.mocked(getHealth).mockResolvedValue({
+      ...healthDemo,
+      data_source: 'github',
+      github_rate_limit: {
+        remaining: 4123,
+        limit: 5000,
+        reset_at: '2026-10-12T14:02:00Z',
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Dépôts suivis')).toBeInTheDocument())
+
+    const badge = screen.getByTestId('github-quota')
+    expect(badge).toHaveTextContent('Quota GitHub')
+    expect(badge).toHaveTextContent('4123 / 5000 requêtes')
+    expect(badge).toHaveTextContent(/réinitialisation/)
+  })
+
+  it('affiche une alerte rouge quand le quota est presque épuisé', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(dashboard)
+    vi.mocked(getHealth).mockResolvedValue({
+      ...healthDemo,
+      data_source: 'github',
+      github_rate_limit: { remaining: 12, limit: 5000, reset_at: null },
+    })
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId('github-quota')).toHaveTextContent('12 / 5000 requêtes'),
+    )
+    expect(screen.getByTestId('github-quota')).toHaveClass('bg-red-500/15')
+  })
+
+  it('n’affiche pas de badge de quota en mode démonstration', async () => {
+    vi.mocked(getDashboard).mockResolvedValue(dashboard)
+
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getByText('Dépôts suivis')).toBeInTheDocument())
+    expect(screen.queryByTestId('github-quota')).not.toBeInTheDocument()
   })
 
   it('affiche les indicateurs du tableau de bord', async () => {

@@ -138,3 +138,22 @@ export function formatDateTime(iso: string): string {
   }
   return formatterFor(i18n.resolvedLanguage ?? 'fr').format(date)
 }
+
+const timeFormatters: Record<string, Intl.DateTimeFormat> = {}
+
+function timeFormatterFor(locale: string): Intl.DateTimeFormat {
+  let formatter = timeFormatters[locale]
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { timeStyle: 'short' })
+    timeFormatters[locale] = formatter
+  }
+  return formatter
+}
+
+export function formatTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+  return timeFormatterFor(i18n.resolvedLanguage ?? 'fr').format(date)
+}

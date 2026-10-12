@@ -2,6 +2,7 @@ import {
   CircleDashed,
   CheckCircle2,
   FolderGit2,
+  Gauge,
   GitMerge,
   GitPullRequest,
   XCircle,
@@ -19,17 +20,43 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDocumentTitle } from '@/hooks/useDocumentTitle'
 import { useAsync, useResource } from '@/hooks/useAsync'
 import { aggregateSnapshots, seriesFor } from '@/lib/snapshots'
-import { formatDateTime } from '@/lib/status'
-import { getDashboard, getSnapshots } from '@/services/apiClient'
+import { formatDateTime, formatTime } from '@/lib/status'
+import { getDashboard, getHealth, getSnapshots } from '@/services/apiClient'
 import type { ActivityItem } from '@/types/api'
 
 const TREND_WINDOW_DAYS = 30
+
+// Seuils relatifs d'alerte du quota GitHub : jaune sous 20 %, rouge sous 5 %.
+const QUOTA_LOW_RATIO = 0.2
+const QUOTA_CRITICAL_RATIO = 0.05
 
 function trendSince(days: number): string {
   const date = new Date()
   date.setUTCDate(date.getUTCDate() - (days - 1))
   return date.toISOString().slice(0, 10)
 }
+
+function quotaLevel(remaining: number, limit: number | null): 'ok' | 'low' | 'critical' {
+  if (remaining === 0) {
+    return 'critical'
+  }
+  if (limit) {
+    const ratio = remaining / limit
+    if (ratio <= QUOTA_CRITICAL_RATIO) {
+      return 'critical'
+    }
+    if (ratio <= QUOTA_LOW_RATIO) {
+      return 'low'
+    }
+  }
+  return 'ok'
+}
+
+const quotaLevelClasses = {
+  ok: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  low: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  critical: 'bg-red-500/15 text-red-300 ring-red-500/30',
+} as const
 
 export function DashboardPage() {
   const { t } = useTranslation()
@@ -44,6 +71,12 @@ export function DashboardPage() {
   const snapshots = useAsync(
     (signal) => getSnapshots({ since, limit: 500 }, signal),
     [since],
+  )
+  const health = useAsync(getHealth, [])
+  const quota = health.data?.github_rate_limit ?? null
+  const level = useMemo(
+    () => (quota?.remaining != null ? quotaLevel(quota.remaining, quota.limit) : null),
+    [quota],
   )
   const trend = useMemo(
     () => aggregateSnapshots(snapshots.data?.items ?? []),
@@ -80,6 +113,22 @@ export function DashboardPage() {
         description={t('dashboard.description')}
         actions={
           <div className="flex items-center gap-2">
+            {quota && quota.remaining != null && level ? (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${quotaLevelClasses[level]}`}
+                data-testid="github-quota"
+              >
+                <Gauge className="size-3.5" aria-hidden />
+                {t('dashboard.quotaLabel')} :{' '}
+                {t('dashboard.quotaValue', {
+                  remaining: quota.remaining,
+                  limit: quota.limit ?? '—',
+                })}
+                {quota.reset_at
+                  ? ` · ${t('dashboard.quotaReset', { time: formatTime(quota.reset_at) })}`
+                  : ''}
+              </span>
+            ) : null}
             <AutoRefreshSelect value={autoSeconds} onChange={setAutoSeconds} />
             <RefreshButton onClick={refreshAll} loading={loading} />
           </div>
