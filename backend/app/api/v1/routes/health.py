@@ -38,8 +38,11 @@ def _github_rate_limit_status(provider_name: str) -> GitHubRateLimitStatus | Non
     if provider_name != "github":
         return None
     observed = ratelimit.snapshot()
+    if observed is None:
+        return None
     reset_epoch = observed["reset_at"]
     return GitHubRateLimitStatus(
+        resource=str(observed.get("resource") or "core"),
         remaining=observed["remaining"],
         limit=observed["limit"],
         reset_at=(datetime.fromtimestamp(reset_epoch, tz=UTC) if reset_epoch is not None else None),

@@ -156,13 +156,15 @@ class GitHubClient:
 
     @staticmethod
     def _record_rate_limit(response: httpx.Response) -> None:
-        """Met à jour l'instantané de quota exposé par la route de santé."""
+        """Met à jour l'instantané de quota (bucket core ou graphql) exposé par la santé."""
         remaining = response.headers.get("x-ratelimit-remaining")
         if remaining is None or not remaining.isdigit():
             return
         limit = response.headers.get("x-ratelimit-limit")
         reset_raw = response.headers.get("x-ratelimit-reset")
+        resource = response.headers.get("x-ratelimit-resource") or "core"
         ratelimit.update(
+            resource=resource,
             remaining=int(remaining),
             limit=int(limit) if limit and limit.isdigit() else None,
             reset_at=int(reset_raw) if reset_raw and reset_raw.isdigit() else None,

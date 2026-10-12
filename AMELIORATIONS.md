@@ -88,12 +88,14 @@ doc `github-integration`. Effort : L.*
 
 ## P2 — Moyen terme (structurants)
 
-### 11. GraphQL pour les issues et le détail des PR
-Le transport GraphQL (désormais réparé et activable) ne couvre que la liste
-des PR : la liste des issues coûte encore 1 requête REST par dépôt (62), et le
-détail d'une PR 4-5 requêtes. Étendre le transport GraphQL aux issues et au
-détail pour diviser la consommation de quota.
-*Fichiers : `integrations/github/graphql.py`, `github_provider.py`. Effort : M.*
+### 11. ~~GraphQL pour les issues et le détail des PR~~ ✅
+Réalisé : la liste des issues interroge les dépôts **par lots d'alias**
+(`ISSUES_BATCH_CHUNK = 10` dépôts par document, pagination en tours) — une
+passe sur 62 dépôts consomme ~7 requêtes au lieu de 62 REST, et la connexion
+GraphQL n'inclut jamais les pull requests. Le détail d'une PR passe aussi en
+GraphQL : une requête agrégée (corps, checks, revues, fichiers,
+`timelineItems`) remplace 5-6 requêtes REST. Requêtes validées contre l'API
+réelle ; le chemin REST reste disponible (`REPOFLOW_GITHUB_USE_GRAPHQL=false`).
 
 ### 12. Checks requis réels (protections de branche)
 `merge_rules` suppose que tous les checks sont requis faute de lire les

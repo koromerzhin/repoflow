@@ -23,6 +23,10 @@ class DatabaseStatus(StrEnum):
 class GitHubRateLimitStatus(BaseModel):
     """Dernier état connu du quota GitHub (fournisseur github uniquement)."""
 
+    resource: str = Field(
+        default="core",
+        description="Bucket concerné : « core » (REST) ou « graphql » (points GraphQL).",
+    )
     remaining: int | None = Field(description="Requêtes restantes avant réinitialisation.")
     limit: int | None = Field(description="Quota total de la fenêtre courante.")
     reset_at: datetime | None = Field(description="Instant de réinitialisation du quota.")

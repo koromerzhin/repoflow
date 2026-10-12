@@ -19,7 +19,15 @@ from app.core.config import get_settings
 from app.core.errors import NotFoundError, ProviderError
 from app.core.logging import get_logger
 from app.integrations.github.client import GitHubClient
-from app.integrations.github.graphql import PULL_REQUESTS_QUERY, pull_requests_page
+from app.integrations.github.graphql import (
+    ISSUES_BATCH_CHUNK,
+    PULL_REQUEST_DETAIL_QUERY,
+    PULL_REQUESTS_QUERY,
+    issues_batch_page,
+    issues_batch_query,
+    pull_request_detail_parts,
+    pull_requests_page,
+)
 from app.integrations.github.mapping import (
     map_combined_checks,
     map_issue,
@@ -180,13 +188,20 @@ class GithubProvider:
     async def get_pull_request(
         self, repository_full_name: str, number: int
     ) -> PullRequestDetailRecord:
-        """Fiche détaillée d'une pull request (fichiers, revues, chronologie)."""
+        """Fiche détaillée d'une pull request (fichiers, revues, chronologie).
+
+        Avec le transport GraphQL activé, une requête agrégée remplace les
+        5-6 requêtes REST (détail, checks, revues, fichiers, chronologie).
+        """
         owner, _, name = repository_full_name.partition("/")
         if not owner or not name:
             raise NotFoundError(
                 "Nom de dépôt invalide ; format attendu : « owner/name ».",
                 code="invalid_repository",
             )
+
+        if self._use_graphql:
+            return await self._pull_request_detail_graphql(repository_full_name, number)
 
         detail = await self._client.get(f"/repos/{owner}/{name}/pulls/{number}")
         head_sha = str((detail.get("head") or {}).get("sha") or "")
@@ -207,11 +222,14 @@ class GithubProvider:
     ) -> list[IssueRecord]:
         """Issues des dépôts accessibles (hors pull requests).
 
-        Les dépôts sont interrogés en parallèle (concurrence bornée et budget
-        par dépôt, comme ``provider.collect``) : un dépôt lent ou en échec
-        réseau est ignoré plutôt que de faire échouer toute la liste ; les
-        erreurs applicatives (limite de requêtes, authentification) remontent.
-        Les dépôts archivés sont exclus : leurs issues sont figées.
+        Avec le transport GraphQL, les dépôts sont interrogés par lots
+        d'alias (une requête pour ``ISSUES_BATCH_CHUNK`` dépôts) et la
+        connexion GraphQL n'inclut jamais les pull requests. Sinon, les
+        dépôts sont interrogés en parallèle en REST (concurrence bornée et
+        budget par dépôt, comme ``provider.collect``) : un dépôt lent ou en
+        échec réseau est ignoré plutôt que de faire échouer toute la liste ;
+        les erreurs applicatives remontent. Les dépôts archivés sont
+        exclus dans tous les cas : leurs issues sont figées.
         """
         if repository_full_name:
             full_names = [repository_full_name]
@@ -220,6 +238,9 @@ class GithubProvider:
             full_names = [
                 repository.full_name for repository in repositories if not repository.archived
             ]
+
+        if self._use_graphql:
+            return await self._issues_graphql(full_names, state=state)
 
         settings = get_settings()
         semaphore = asyncio.Semaphore(settings.github_max_concurrency)
@@ -274,6 +295,62 @@ class GithubProvider:
         combined_status = await self._client.get(f"/repos/{owner}/{name}/commits/{ref}/status")
         statuses = combined_status.get("statuses", []) if isinstance(combined_status, dict) else []
         return map_combined_checks(check_runs, statuses)
+
+    async def _pull_request_detail_graphql(
+        self, full_name: str, number: int
+    ) -> PullRequestDetailRecord:
+        """Détail complet d'une PR via une requête GraphQL agrégée."""
+        owner, _, name = full_name.partition("/")
+        data = await self._client.execute_graphql(
+            PULL_REQUEST_DETAIL_QUERY, {"owner": owner, "name": name, "number": number}
+        )
+        node = (data.get("repository") or {}).get("pullRequest")
+        if node is None:
+            raise NotFoundError("Ressource GitHub introuvable.", code="github_resource_not_found")
+        detail, check_runs, statuses, reviews, files, timeline = pull_request_detail_parts(node)
+        return map_pull_request_detail(
+            detail,
+            full_name,
+            map_combined_checks(check_runs, statuses),
+            reviews,
+            files,
+            timeline,
+        )
+
+    async def _issues_graphql(
+        self, full_names: list[str], *, state: str | None
+    ) -> list[IssueRecord]:
+        """Issues de plusieurs dépôts via des documents GraphQL par lots.
+
+        Chaque requête regroupe ``ISSUES_BATCH_CHUNK`` dépôts (alias) : une
+        passe complète consomme quelques requêtes au lieu d'une par dépôt.
+        Les pages suivantes des dépôts volumineux sont reçues en tours
+        successifs, bornés par ``max_pages``.
+        """
+        records: list[IssueRecord] = []
+        cursors: dict[str, str | None] = dict.fromkeys(full_names)
+        pending = list(full_names)
+        for _ in range(self._max_pages):
+            if not pending:
+                break
+            still_pending: list[str] = []
+            for start in range(0, len(pending), ISSUES_BATCH_CHUNK):
+                chunk = pending[start : start + ISSUES_BATCH_CHUNK]
+                entries: list[tuple[str, str]] = []
+                for full_name in chunk:
+                    owner, _, name = full_name.partition("/")
+                    entries.append((owner, name))
+                query, variables = issues_batch_query(entries, cursors, state=state)
+                data = await self._client.execute_graphql(query, variables)
+                for full_name, items, has_next, cursor in issues_batch_page(data, entries):
+                    records.extend(
+                        map_issue(item, full_name, is_pull_request=False) for item in items
+                    )
+                    if has_next and cursor:
+                        cursors[full_name] = cursor
+                        still_pending.append(full_name)
+            pending = still_pending
+        return records
 
     async def merge_pull_request(
         self,

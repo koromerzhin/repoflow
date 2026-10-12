@@ -356,7 +356,12 @@ async def test_quota_enregistre_apres_reponse() -> None:
         await client.aclose()
         ratelimit.reset()
 
-    assert snapshot == {"remaining": 4998, "limit": 5000, "reset_at": 1700000000}
+    assert snapshot == {
+        "resource": "core",
+        "remaining": 4998,
+        "limit": 5000,
+        "reset_at": 1700000000,
+    }
 
 
 async def test_quota_non_renseigne_sans_entetes() -> None:
@@ -372,7 +377,7 @@ async def test_quota_non_renseigne_sans_entetes() -> None:
     finally:
         await client.aclose()
 
-    assert snapshot == {"remaining": None, "limit": None, "reset_at": None}
+    assert snapshot is None
 
 
 async def test_token_provider_autorise_chaque_requete() -> None:

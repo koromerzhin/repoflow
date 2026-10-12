@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
+from app.core.errors import NotFoundError
 from app.integrations.github.client import GitHubClient
 from app.integrations.github.errors import GitHubRateLimitError
 from app.integrations.github.github_provider import GithubProvider
@@ -394,8 +397,6 @@ async def test_get_pull_request_detail(provider: GithubProvider) -> None:
 
 
 async def test_get_pull_request_inconnue(provider: GithubProvider) -> None:
-    from app.core.errors import NotFoundError
-
     try:
         with pytest.raises(NotFoundError):
             await provider.get_pull_request("acme/inconnu", 1)
@@ -413,8 +414,6 @@ async def test_merge_pull_request(provider: GithubProvider) -> None:
 
 
 async def test_merge_repository_invalide(provider: GithubProvider) -> None:
-    from app.core.errors import NotFoundError
-
     try:
         with pytest.raises(NotFoundError):
             await provider.merge_pull_request("invalide", 10)
@@ -424,3 +423,180 @@ async def test_merge_repository_invalide(provider: GithubProvider) -> None:
 
 async def test_aclose(provider: GithubProvider) -> None:
     await provider.aclose()
+
+
+def _issue_graphql_node() -> dict:
+    return {
+        "id": "I_5",
+        "number": 5,
+        "title": "Bug ouvert",
+        "body": "**Gravité** : moyenne.",
+        "author": {"login": "dev"},
+        "state": "OPEN",
+        "createdAt": "2024-05-01T10:00:00Z",
+        "updatedAt": "2024-05-02T10:00:00Z",
+        "url": "https://github.com/acme/web-app/issues/5",
+        "labels": {"nodes": [{"name": "bug"}]},
+        "assignees": {"nodes": [{"login": "dev"}]},
+        "milestone": None,
+    }
+
+
+def _pr_graphql_node() -> dict:
+    return {
+        "id": "PR_10",
+        "number": 10,
+        "title": "Ajouter la limitation de débit",
+        "body": "## Contexte",
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "createdAt": "2024-05-01T10:00:00Z",
+        "updatedAt": "2024-05-02T10:00:00Z",
+        "url": "https://github.com/acme/web-app/pull/10",
+        "author": {"login": "sami"},
+        "headRefName": "feat/rate-limit",
+        "baseRefName": "main",
+        "changedFiles": 1,
+        "additions": 120,
+        "deletions": 8,
+        "commits": {
+            "nodes": [
+                {
+                    "commit": {
+                        "statusCheckRollup": {
+                            "contexts": {
+                                "nodes": [
+                                    {
+                                        "__typename": "CheckRun",
+                                        "name": "build",
+                                        "conclusion": "SUCCESS",
+                                        "status": "COMPLETED",
+                                        "detailsUrl": "https://example.com/run/1",
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "reviews": {
+            "nodes": [
+                {
+                    "id": "rv1",
+                    "author": {"login": "alice"},
+                    "state": "APPROVED",
+                    "submittedAt": "2024-05-02T10:30:00Z",
+                    "body": "RAS",
+                }
+            ]
+        },
+        "files": {"nodes": [{"path": "src/limit.py", "additions": 100, "deletions": 0}]},
+        "timelineItems": {
+            "nodes": [
+                {
+                    "__typename": "IssueComment",
+                    "id": "c1",
+                    "author": {"login": "alice"},
+                    "body": "Merci !",
+                    "createdAt": "2024-05-02T11:00:00Z",
+                },
+                {
+                    "__typename": "PullRequestCommit",
+                    "id": "p1",
+                    "actor": {"login": "sami"},
+                    "createdAt": "2024-05-01T12:00:00Z",
+                    "commit": {"oid": "7ca61cccd16ad567"},
+                },
+            ]
+        },
+    }
+
+
+def _graphql_handler(request: httpx.Request) -> httpx.Response:
+    path = request.url.path
+    if path == "/user/repos":
+        return httpx.Response(200, json=_repos())
+    if path == "/graphql":
+        variables = json.loads(request.content).get("variables") or {}
+        if "number" in variables:
+            return httpx.Response(
+                200, json={"data": {"repository": {"pullRequest": _pr_graphql_node()}}}
+            )
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "r0": {
+                        "issues": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [_issue_graphql_node()],
+                        }
+                    },
+                    "r1": {
+                        "issues": {
+                            "pageInfo": {"hasNextPage": False, "endCursor": None},
+                            "nodes": [],
+                        }
+                    },
+                }
+            },
+        )
+    return httpx.Response(404, json={"message": f"non simulé: {path}"})
+
+
+def _graphql_provider() -> GithubProvider:
+    client = GitHubClient(
+        token="secret-token",
+        api_url="https://api.github.com",
+        transport=httpx.MockTransport(_graphql_handler),
+    )
+    return GithubProvider(token="secret-token", client=client, use_graphql=True)
+
+
+async def test_list_issues_transport_graphql_par_lots() -> None:
+    provider = _graphql_provider()
+    try:
+        issues = await provider.list_issues()
+        assert len(issues) == 1
+        issue = issues[0]
+        assert issue.repository_full_name == "acme/web-app"
+        assert issue.is_pull_request is False
+        assert issue.body == "**Gravité** : moyenne."
+        assert issue.labels == ["bug"]
+        assert issue.assignees == ["dev"]
+    finally:
+        await provider.aclose()
+
+
+async def test_get_pull_request_transport_graphql() -> None:
+    provider = _graphql_provider()
+    try:
+        detail = await provider.get_pull_request("acme/web-app", 10)
+        assert detail.number == 10
+        assert detail.body == "## Contexte"
+        assert detail.changed_files == 1
+        assert [check.name for check in detail.checks] == ["build"]
+        assert detail.reviews[0].state.value == "approved"
+        assert detail.files[0].filename == "src/limit.py"
+        assert [event.event_type for event in detail.timeline] == ["commented", "committed"]
+        assert detail.timeline[1].message.startswith("a poussé le commit 7ca61cc")
+    finally:
+        await provider.aclose()
+
+
+async def test_get_pull_request_graphql_introuvable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"repository": {"pullRequest": None}}})
+
+    client = GitHubClient(
+        token="secret-token",
+        api_url="https://api.github.com",
+        transport=httpx.MockTransport(handler),
+    )
+    provider = GithubProvider(token="secret-token", client=client, use_graphql=True)
+    try:
+        with pytest.raises(NotFoundError):
+            await provider.get_pull_request("acme/web-app", 999)
+    finally:
+        await provider.aclose()

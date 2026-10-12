@@ -235,3 +235,202 @@ async def test_transport_graphql_passe_par_une_seule_requete_par_page() -> None:
     assert calls == ["/graphql"]
     assert len(records) == 1
     assert records[0].number == 142
+
+
+def test_issues_batch_query_alias_et_variables() -> None:
+    from app.integrations.github.graphql import issues_batch_query
+
+    query, variables = issues_batch_query(
+        [("acme", "alpha"), ("acme", "beta")],
+        {"acme/alpha": None, "acme/beta": "CUR1"},
+        state="open",
+    )
+
+    assert "r0: repository(owner: $o0, name: $n0)" in query
+    assert "r1: repository(owner: $o1, name: $n1)" in query
+    assert "states: $states0" in query and "states: $states1" in query
+    assert variables["o0"] == "acme" and variables["n0"] == "alpha"
+    assert variables["a0"] is None and variables["a1"] == "CUR1"
+    assert variables["states0"] == ["OPEN"]
+    assert variables["first"] == 50
+
+
+def test_issues_batch_query_sans_filtre_d_etat() -> None:
+    from app.integrations.github.graphql import issues_batch_query
+
+    query, variables = issues_batch_query([("acme", "alpha")], {"acme/alpha": None}, state=None)
+
+    assert "states:" not in query
+    assert "states0" not in variables
+
+
+def test_issues_batch_page_parse_les_depots() -> None:
+    from app.integrations.github.graphql import issue_rest, issues_batch_page
+
+    node = {
+        "id": "I_1",
+        "number": 5,
+        "title": "Bug ouvert",
+        "body": "**Description**",
+        "author": {"login": "dev"},
+        "state": "OPEN",
+        "createdAt": "2026-01-01T08:00:00Z",
+        "updatedAt": "2026-01-02T08:00:00Z",
+        "url": "https://github.com/acme/alpha/issues/5",
+        "labels": {"nodes": [{"name": "bug"}]},
+        "assignees": {"nodes": [{"login": "lea.b"}]},
+        "milestone": {"title": "Sprint 1"},
+    }
+    rest = issue_rest(node)
+    assert rest["user"] == {"login": "dev"}
+    assert rest["labels"] == [{"name": "bug"}]
+    assert rest["assignees"] == [{"login": "lea.b"}]
+    assert rest["milestone"] == {"title": "Sprint 1"}
+    assert rest["body"] == "**Description**"
+
+    data = {
+        "r0": {"issues": {"pageInfo": {"hasNextPage": True, "endCursor": "C1"}, "nodes": [node]}},
+        "r1": None,
+    }
+    pages = issues_batch_page(data, [("acme", "alpha"), ("acme", "beta")])
+    assert pages[0][0] == "acme/alpha"
+    assert len(pages[0][1]) == 1
+    assert pages[0][2] is True and pages[0][3] == "C1"
+    assert pages[1] == ("acme/beta", [], False, None)
+
+
+def test_timeline_rest_mappe_les_types_connus() -> None:
+    from app.integrations.github.graphql import timeline_rest
+
+    nodes = [
+        {
+            "__typename": "IssueComment",
+            "id": "c1",
+            "author": {"login": "lea.b"},
+            "body": "Merci",
+            "createdAt": "2026-01-01T10:00:00Z",
+        },
+        {
+            "__typename": "PullRequestReview",
+            "id": "r1",
+            "author": {"login": "sam.r"},
+            "state": "APPROVED",
+            "submittedAt": "2026-01-01T11:00:00Z",
+            "body": "LGTM",
+        },
+        {
+            "__typename": "MergedEvent",
+            "id": "m1",
+            "actor": {"login": "bot"},
+            "createdAt": "2026-01-01T12:00:00Z",
+        },
+        {
+            "__typename": "LabeledEvent",
+            "id": "l1",
+            "actor": {"login": "bot"},
+            "createdAt": "2026-01-01T12:30:00Z",
+            "label": {"name": "dependencies"},
+        },
+        {
+            "__typename": "PullRequestCommit",
+            "id": "p1",
+            "actor": {"login": "bot"},
+            "createdAt": "2026-01-01T13:00:00Z",
+            "commit": {"oid": "abc123def456"},
+        },
+        {"__typename": "MentionedEvent", "id": "x1", "createdAt": "2026-01-01T14:00:00Z"},
+    ]
+    events = timeline_rest(nodes)
+
+    assert [event["event"] for event in events] == [
+        "commented",
+        "reviewed",
+        "merged",
+        "labeled",
+        "committed",
+    ]
+    assert events[0]["body"] == "Merci"
+    assert events[1]["state"] == "APPROVED" and events[1]["user"] == {"login": "sam.r"}
+    assert events[3]["label"] == {"name": "dependencies"}
+    assert events[4]["sha"] == "abc123def456"
+
+
+def test_pull_request_detail_parts_decompose_le_noeud() -> None:
+    from app.integrations.github.graphql import pull_request_detail_parts
+
+    node = {
+        "id": "PR_1",
+        "number": 26,
+        "title": "Bump release-it",
+        "body": "## Contexte",
+        "isDraft": False,
+        "mergeable": "MERGEABLE",
+        "createdAt": "2026-01-01T08:00:00Z",
+        "updatedAt": "2026-01-02T08:00:00Z",
+        "url": "https://github.com/acme/alpha/pull/26",
+        "author": {"login": "renovate"},
+        "headRefName": "deps/x",
+        "baseRefName": "main",
+        "changedFiles": 2,
+        "additions": 10,
+        "deletions": 4,
+        "commits": {
+            "nodes": [
+                {
+                    "commit": {
+                        "statusCheckRollup": {
+                            "contexts": {
+                                "nodes": [
+                                    {
+                                        "__typename": "CheckRun",
+                                        "name": "build",
+                                        "conclusion": "SUCCESS",
+                                        "status": "COMPLETED",
+                                        "detailsUrl": "https://ci/run/1",
+                                    },
+                                    {
+                                        "__typename": "StatusContext",
+                                        "context": "deploy",
+                                        "state": "SUCCESS",
+                                        "targetUrl": "https://ci/deploy",
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "reviews": {
+            "nodes": [
+                {
+                    "id": "rv1",
+                    "author": {"login": "lea.b"},
+                    "state": "APPROVED",
+                    "submittedAt": "2026-01-02T09:00:00Z",
+                    "body": "RAS",
+                }
+            ]
+        },
+        "files": {"nodes": [{"path": "package.json", "additions": 2, "deletions": 2}]},
+        "timelineItems": {
+            "nodes": [
+                {
+                    "__typename": "IssueComment",
+                    "id": "c1",
+                    "author": {"login": "bot"},
+                    "body": "Done",
+                    "createdAt": "2026-01-01T10:00:00Z",
+                },
+            ]
+        },
+    }
+    detail, check_runs, statuses, reviews, files, timeline = pull_request_detail_parts(node)
+
+    assert detail["body"] == "## Contexte"
+    assert detail["changed_files"] == 2
+    assert [check["name"] for check in check_runs] == ["build"]
+    assert [status["context"] for status in statuses] == ["deploy"]
+    assert reviews[0]["state"] == "APPROVED"
+    assert files[0]["filename"] == "package.json"
+    assert timeline[0]["event"] == "commented"

@@ -31,7 +31,7 @@ def test_health_ok(client: TestClient) -> None:
 
 def test_health_expose_quota_github(client: TestClient) -> None:
     ratelimit.reset()
-    ratelimit.update(remaining=4123, limit=5000, reset_at=1_700_000_000)
+    ratelimit.update(resource="core", remaining=4123, limit=5000, reset_at=1_700_000_000)
     app.dependency_overrides[get_provider] = lambda: _StubGithubProvider()
     try:
         payload = client.get("/api/health").json()
@@ -44,6 +44,25 @@ def test_health_expose_quota_github(client: TestClient) -> None:
     assert quota["remaining"] == 4123
     assert quota["limit"] == 5000
     assert quota["reset_at"] is not None
+
+
+def test_quota_expose_le_bucket_le_plus_contreint(client: TestClient) -> None:
+    ratelimit.reset()
+    ratelimit.update(resource="core", remaining=4900, limit=5000, reset_at=1_700_000_000)
+    ratelimit.update(
+        resource="graphql", remaining=1500, limit=5000, reset_at=1_700_003_600
+    )
+    app.dependency_overrides[get_provider] = lambda: _StubGithubProvider()
+    try:
+        payload = client.get("/api/health").json()
+    finally:
+        app.dependency_overrides.clear()
+        ratelimit.reset()
+
+    quota = payload["github_rate_limit"]
+    assert quota is not None
+    assert quota["resource"] == "graphql"
+    assert quota["remaining"] == 1500
 
 
 def test_health_does_not_leak_secrets(client: TestClient) -> None:
@@ -74,7 +93,7 @@ def test_readiness_ok(client: TestClient) -> None:
 
 def test_readiness_expose_quota_github(client: TestClient) -> None:
     ratelimit.reset()
-    ratelimit.update(remaining=42, limit=5000, reset_at=1_700_000_000)
+    ratelimit.update(resource="core", remaining=42, limit=5000, reset_at=1_700_000_000)
     app.dependency_overrides[get_provider] = lambda: _StubGithubProvider()
     try:
         payload = client.get("/api/health/ready").json()

@@ -67,7 +67,12 @@ describe('AppLayout', () => {
     vi.mocked(getHealth).mockResolvedValue(
       health({
         data_source: 'github',
-        github_rate_limit: { remaining: 42, limit: 5000, reset_at: '2026-01-01T11:00:00Z' },
+        github_rate_limit: {
+          resource: 'core',
+          remaining: 42,
+          limit: 5000,
+          reset_at: '2026-01-01T11:00:00Z',
+        },
       }),
     )
 
@@ -82,7 +87,12 @@ describe('AppLayout', () => {
     vi.mocked(getHealth).mockResolvedValue(
       health({
         data_source: 'github',
-        github_rate_limit: { remaining: 4123, limit: 5000, reset_at: '2026-01-01T11:00:00Z' },
+        github_rate_limit: {
+          resource: 'core',
+          remaining: 4123,
+          limit: 5000,
+          reset_at: '2026-01-01T11:00:00Z',
+        },
       }),
     )
 

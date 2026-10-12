@@ -116,6 +116,7 @@ export const en = {
     description: 'Overview of tracked repositories, pull requests and CI check status.',
     recentActivity: 'Recent activity',
     quotaLabel: 'GitHub quota',
+    quotaLabelGraphql: 'GitHub quota (GraphQL)',
     quotaValue: '{{remaining}} / {{limit}} requests',
     quotaReset: 'resets at {{time}}',
     trendAria: 'Trend over the last {{days}} days — {{counter}}',

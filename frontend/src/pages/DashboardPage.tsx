@@ -119,7 +119,12 @@ export function DashboardPage() {
                 data-testid="github-quota"
               >
                 <Gauge className="size-3.5" aria-hidden />
-                {t('dashboard.quotaLabel')} :{' '}
+                {t(
+                  quota.resource === 'graphql'
+                    ? 'dashboard.quotaLabelGraphql'
+                    : 'dashboard.quotaLabel',
+                )}
+                :{' '}
                 {t('dashboard.quotaValue', {
                   remaining: quota.remaining,
                   limit: quota.limit ?? '—',

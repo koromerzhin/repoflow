@@ -69,6 +69,7 @@ describe('DashboardPage', () => {
       ...healthDemo,
       data_source: 'github',
       github_rate_limit: {
+        resource: 'core',
         remaining: 4123,
         limit: 5000,
         reset_at: '2026-10-12T14:02:00Z',
@@ -94,7 +95,7 @@ describe('DashboardPage', () => {
     vi.mocked(getHealth).mockResolvedValue({
       ...healthDemo,
       data_source: 'github',
-      github_rate_limit: { remaining: 12, limit: 5000, reset_at: null },
+      github_rate_limit: { resource: 'graphql', remaining: 12, limit: 5000, reset_at: null },
     })
 
     render(

@@ -31,6 +31,7 @@ export interface HealthResponse {
   database: 'ok' | 'unavailable' | 'not_checked'
   kill_switch_engaged: boolean
   github_rate_limit?: {
+    resource: string
     remaining: number | null
     limit: number | null
     reset_at: string | null
