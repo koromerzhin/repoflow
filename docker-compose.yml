@@ -67,7 +67,7 @@ services:
   # Activer uniquement avec --profile postgres ; le backend reste sur SQLite
   # par défaut et utilise PostgreSQL si REPOFLOW_DATABASE_URL le pointe ici.
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     profiles: ["postgres"]
     environment:
       POSTGRES_USER: repoflow
