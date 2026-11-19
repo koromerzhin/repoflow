@@ -9,7 +9,7 @@ RepoFlow surveille vos dépôts, calcule un score de priorisation, met en évide
 ## Premiers pas
 
 1. Copier `.env.example` vers `.env` et ajuster les variables (provider GitHub/demo, CORS, etc.)
-2. Lancer avec Docker Compose : `docker compose up --build` → Frontend http://localhost:5173, API http://localhost:8000
+2. Lancer via la stack lampy : `task repoflow:exec` → Frontend https://repoflow.traefik.me, API https://repoflow.traefik.me/api (ou en local : backend `uvicorn`, frontend `npm run dev`)
 3. Se connecter (si `REPOFLOW_API_TOKEN` est défini) avec le jeton dans l'overlay d'authentification
 4. Ajouter au moins un dépôt suivi dans **Automatisations → Dépôts suivis**
 

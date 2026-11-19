@@ -13,27 +13,32 @@ et de préparer la fusion des pull requests selon des règles configurables.
 > n'a lieu que si une règle l'autorise, que la PR est éligible et que
 > l'arrêt d'urgence est désengagé.
 
-## Démarrage rapide (Docker Compose)
+## Démarrage rapide
 
-Le moyen le plus simple, si Docker est installé — aucun prérequis Python/Node :
+Le déploiement conteneurisé se fait désormais via la stack **lampy**
+(réseaux externes + Traefik) pilotée par le `Taskfile.yml` à la racine :
 
 ```bash
 git clone <url-du-depot> repoflow
 cd repoflow
 cp .env.example .env
-docker compose up --build
+task repoflow:exec
 ```
 
-- Interface : http://localhost:5173
-- API : http://localhost:8000 (documentation Swagger : `/docs`)
+- Interface : https://repoflow.traefik.me
+- API : https://repoflow.traefik.me/api (documentation Swagger : `/docs`)
 - Par défaut : **mode démonstration** (données fictives, aucun jeton requis)
   et base SQLite persistée dans le dossier `./data` du dépôt.
 
+Prérequis : Docker en mode Swarm, la stack lampy déployée (réseaux
+`proxylampy` / `serverlampy`) et `go-task` installé.
+
 Pour brancher des vraies données GitHub, éditer `.env` :
 `REPOFLOW_GITHUB_PROVIDER=github` et renseigner `REPOFLOW_GITHUB_TOKEN`
-(voir `docs/github-integration.md`). Pour utiliser PostgreSQL : pointer
-`REPOFLOW_DATABASE_URL` vers le service `postgres` du compose, puis lancer
-`docker compose --profile postgres up --build` (détails plus bas).
+(voir `docs/github-integration.md`).
+
+Pour le développement local sans Docker, voir les sections « Backend » et
+« Frontend » plus bas.
 
 ## Fonctionnalités
 
@@ -103,7 +108,7 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 - **Qualité** : couverture de tests suivie en CI (backend ≥ 90 %, frontend
   ≥ 80 % de lignes).
 - Tests backend (Pytest + coverage) et frontend (Vitest + coverage).
-- Docker Compose (backend, frontend, PostgreSQL optionnel) et CI GitHub
+- Déploiement via la stack lampy (backend, frontend) et CI GitHub
   Actions.
 
 ### À venir
@@ -117,13 +122,15 @@ Pour brancher des vraies données GitHub, éditer `.env` :
 - **Frontend** : React 19, TypeScript (strict), Vite, React Router, i18next
   (react-i18next), Tailwind CSS, lucide-react, ESLint, Vitest (+ couverture),
   React Testing Library.
-- **Exécution** : Docker, Docker Compose, GitHub Actions.
+- **Exécution** : Docker (Swarm), go-task, stack lampy (Traefik), GitHub
+  Actions.
 
 ## Prérequis
 
 - Python **3.11+** (testé avec 3.14).
 - Node.js **20+** (testé avec 22) et npm.
-- Docker et Docker Compose (optionnel, pour l'exécution conteneurisée).
+- Docker en mode Swarm et la stack lampy déployée (optionnel, pour
+  l'exécution conteneurisée). go-task pour piloter les tâches.
 
 ## Installation locale
 
@@ -187,35 +194,38 @@ npm run dev
 Le frontend relaie les appels `/api` vers le backend (proxy Vite), aucune
 configuration CORS supplémentaire n'est nécessaire.
 
-## Exécution via Docker Compose (détaillée)
+## Exécution via la stack lampy (détaillée)
 
-Cf. aussi « Démarrage rapide » en haut de page.
+Cf. aussi « Démarrage rapide » en haut de page. Le déploiement utilise le
+fichier `docker-compose-lampy.yml` (images `repoflow/backend:latest` et
+`repoflow/frontend:latest`, construites par `task repoflow:build-all`) et les
+réseaux externes `proxylampy` / `serverlampy`.
 
 ```bash
 cp .env.example .env
-docker compose up --build
+task repoflow:exec
 ```
 
-- Backend : http://localhost:8000
-- Frontend : http://localhost:5173
+- Frontend : https://repoflow.traefik.me
+- Backend : https://repoflow.traefik.me/api
 
 La base SQLite est persistée dans le dossier `./data` à la racine du dépôt
 (`repoflow.db` directement accessible sur l'hôte). Le conteneur backend
 tourne en non-root (uid 1001) : si le dossier n'existe pas encore, le créer
-et lui donner la propriété correspondante :
+et lui donner les droits d'écriture correspondants :
 
 ```bash
-mkdir -p data && sudo chown 1001:1001 data
+mkdir -p data && chmod 777 data
 ```
 
-Avec PostgreSQL (profil optionnel) :
+Tâches utiles :
 
 ```bash
-# 1. Adapter .env :
-#    REPOFLOW_DATABASE_URL=postgresql+psycopg://repoflow:repoflow@postgres:5432/repoflow
-#    (le mot de passe doit correspondre à REPOFLOW_DB_PASSWORD)
-# 2. Lancer, profil "postgres" inclus :
-docker compose --profile postgres up --build
+task repoflow:build-all      # construire les images
+task repoflow:deploy        # déployer la stack
+task repoflow:ls            # lister les services
+task bash:backend           # shell dans le backend
+task bash:frontend          # shell dans le frontend
 ```
 
 ## Tests et qualité
@@ -277,7 +287,8 @@ repoflow/
 │       └── test/        main.tsx
 ├── docs/                   # architecture, GitHub, guide utilisateur
 ├── .github/workflows/      # CI
-├── docker-compose.yml
+├── Taskfile.yml
+├── docker-compose-lampy.yml
 ├── .env.example
 ├── AGENTS.md
 ├── CONTRIBUTING.md

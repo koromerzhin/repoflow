@@ -1,0 +1,48 @@
+# RepoFlow — déploiement sur la stack lampy (réseaux externes + Traefik)
+#
+# Utilise les images construites par `task repoflow:build-all`.
+# Les réseaux proxylampy/serverlampy sont créés par lampy (`task lampy:create-network`).
+
+networks:
+  proxylampy:
+    external: true
+  serverlampy:
+    external: true
+
+services:
+  backend:
+    image: repoflow/backend:latest
+    environment:
+      REPOFLOW_ENVIRONMENT: ${REPOFLOW_ENVIRONMENT:-development}
+      REPOFLOW_DATABASE_URL: ${REPOFLOW_DATABASE_URL:-sqlite+pysqlite:////data/repoflow.db}
+      REPOFLOW_AUTO_CREATE_TABLES: ${REPOFLOW_AUTO_CREATE_TABLES:-true}
+      REPOFLOW_GITHUB_PROVIDER: ${REPOFLOW_GITHUB_PROVIDER:-demo}
+      REPOFLOW_GITHUB_TOKEN: ${REPOFLOW_GITHUB_TOKEN:-}
+      REPOFLOW_GITHUB_API_URL: ${REPOFLOW_GITHUB_API_URL:-https://api.github.com}
+      REPOFLOW_CORS_ORIGINS: ${REPOFLOW_CORS_ORIGINS:-http://repoflow.traefik.me,https://repoflow.traefik.me}
+      REPOFLOW_CACHE_BACKEND: ${REPOFLOW_CACHE_BACKEND:-memory}
+    volumes:
+      - ./data:/data
+    networks:
+      - serverlampy
+    deploy:
+      labels:
+        - "traefik.enable=false"
+
+  frontend:
+    image: repoflow/frontend:latest
+    environment:
+      VITE_API_BASE_URL: /api
+      VITE_PROXY_TARGET: http://backend:8000
+    depends_on:
+      - backend
+    networks:
+      - serverlampy
+      - proxylampy
+    deploy:
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.repoflow.rule=Host(`repoflow.traefik.me`)"
+        - "traefik.http.routers.repoflow-tls.tls.domains[0].main=repoflow.traefik.me"
+        - "traefik.http.routers.repoflow.tls=true"
+        - "traefik.http.services.repoflow.loadbalancer.server.port=5173"

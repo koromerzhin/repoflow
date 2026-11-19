@@ -16,6 +16,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: ['.traefik.me', 'localhost', '127.0.0.1'],
     proxy: {
       // Le frontend de développement relaie les appels API vers le backend
       // FastAPI afin d'éviter toute configuration CORS locale.

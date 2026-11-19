@@ -128,7 +128,7 @@ archivé reste interrogeable individuellement (vue ciblée, détail de PR).
 
 ## Déploiement / exécution locale
 
-- **Développement** : `docker compose up --build` (backend+frontend) ou local (venv + npm).
+- **Développement** : `task repoflow:exec` (stack lampy) ou local (venv + npm).
 - **Tests** : backend `pytest` (cov >=90%), frontend `vitest` (lignes>=80%, branches>=65%), E2E Playwright.
 - **Base** : SQLite par défaut (dév), PostgreSQL via profil compose. Migrations Alembic obligatoires.
 - **Configuration** : via variables d'environnement (`.env`) — jamais de secrets dans le front.

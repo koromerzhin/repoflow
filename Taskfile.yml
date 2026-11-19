@@ -1,0 +1,173 @@
+version: 3
+
+# Taskfile principal - Tâches globales et inclusions
+# Charge automatiquement les variables depuis le fichier .env s'il existe
+dotenv: [ '.env' ]
+
+includes:
+  docker: ./taskfiles/docker/Taskfile.yml
+  utils: ./taskfiles/utils/Taskfile.yml
+  env: ./taskfiles/env/Taskfile.yml
+  nodejs: ./taskfiles/nodejs/Taskfile.yml
+  download: ./taskfiles/download/Taskfile.yml
+  help: ./taskfiles/help/Taskfile.yml
+  lint: ./taskfiles/lint/Taskfile.yml
+
+vars:
+  # Variables avec valeurs par défaut depuis .env ou valeurs de fallback.
+  PROJECT_NAME: '{{.PROJECT_NAME | default "repoflow"}}'
+  ENVIRONMENT: '{{.ENVIRONMENT | default "development"}}'
+  STACK_NAME: '{{.STACK_NAME | default "repoflow"}}'
+  SERVERNAME: '{{.SERVERNAME | default "repoflow.traefik.me"}}'
+  DOCKERCOMPOSEFILE: '{{.DOCKERCOMPOSEFILE | default "docker-compose-lampy.yml"}}'
+
+tasks:
+  default:
+    desc: "Affiche l'aide et les tâches disponibles"
+    silent: true
+    cmds:
+    - echo "🛠️  RepoFlow"
+    - echo ""
+    - task --list
+    - echo ""
+
+  info:
+    desc: "Affiche les informations du projet avec les variables d'environnement"
+    silent: true
+    cmds:
+    - |
+      echo "🛠️  {{.PROJECT_NAME}} - RepoFlow"
+      echo "Environnement: {{.ENVIRONMENT}}"
+
+  help:
+    desc: "Affiche l'aide détaillée"
+    aliases: [ h ]
+    cmds:
+    - task: default
+
+  lint:all:
+    desc: "Exécute tous les linters disponibles"
+    silent: true
+    cmds:
+    - task: lint:yml
+      vars:
+        IGNORE_DIR: "taskfiles"
+    - task: lint:md
+      vars:
+        IGNORE_DIR: "taskfiles"
+    - task: lint:action
+    - task: lint:docker
+
+  repoflow:swarm-init:
+    desc: "Initialise le swarm Docker"
+    silent: true
+    cmds:
+    - task: docker:swarm:init
+
+  repoflow:create-network:
+    desc: "Crée les réseaux Docker nécessaires au projet (lampy)"
+    silent: true
+    cmds:
+    - task: docker:network:create
+      vars:
+        NETWORK_NAME: proxylampy
+        NETWORK_DRIVER: overlay
+    - task: docker:network:create
+      vars:
+        NETWORK_NAME: serverlampy
+        NETWORK_DRIVER: overlay
+
+  repoflow:build-backend:
+    desc: "Construit l'image backend RepoFlow"
+    silent: true
+    cmds:
+    - docker build -t repoflow/backend:latest -f backend/Dockerfile backend
+
+  repoflow:build-frontend:
+    desc: "Construit l'image frontend RepoFlow"
+    silent: true
+    cmds:
+    - docker build -t repoflow/frontend:latest -f frontend/Dockerfile frontend
+
+  repoflow:build-all:
+    desc: "Construit toutes les images RepoFlow"
+    silent: true
+    cmds:
+    - task: repoflow:build-backend
+    - task: repoflow:build-frontend
+
+  repoflow:getpull-image:
+    desc: "Télécharge les images Docker définies dans le docker-compose"
+    silent: true
+    cmds:
+    - task: docker:images:pull
+      vars:
+        COMPOSE_FILE: "{{.DOCKERCOMPOSEFILE}}"
+
+  repoflow:deploy:
+    desc: "Déploie la stack RepoFlow sur lampy"
+    silent: true
+    cmds:
+    - task: repoflow:build-all
+    - task: docker:stack:deploy
+      vars:
+        COMPOSE_FILE: "{{.DOCKERCOMPOSEFILE}}"
+        STACK_NAME: "{{.STACK_NAME}}"
+
+  repoflow:waiting:
+    desc: "Attend que les services RepoFlow soient opérationnels"
+    silent: true
+    cmds:
+    - task: docker:stack:check:containers:ready
+      vars:
+        CONTAINERS: "backend,frontend"
+        STACK_NAME: "{{.STACK_NAME}}"
+
+  repoflow:ls:
+    desc: "Liste les services de la stack RepoFlow"
+    silent: true
+    cmds:
+    - task: docker:stack:services
+      vars:
+        STACK_NAME: "{{.STACK_NAME}}"
+
+  repoflow:bash:
+    desc: "Ouvre un shell dans un conteneur de la stack RepoFlow"
+    internal: true
+    silent: true
+    vars:
+      CONTAINER: '{{.CONTAINER | default ""}}'
+    cmds:
+    - task: docker:stack:shell
+      vars:
+        STACK_NAME: "{{.STACK_NAME}}"
+        SERVICE_NAME: "{{.CONTAINER}}"
+
+  bash:backend:
+    desc: "Ouvre un shell dans le conteneur backend"
+    silent: true
+    cmds:
+    - task: repoflow:bash
+      vars:
+        CONTAINER: backend
+
+  bash:frontend:
+    desc: "Ouvre un shell dans le conteneur frontend"
+    silent: true
+    cmds:
+    - task: repoflow:bash
+      vars:
+        CONTAINER: frontend
+
+  repoflow:exec:
+    desc: "Déploie la stack RepoFlow complète (swarm, réseaux, build, deploy, attente, liste)"
+    cmds:
+    - task: env:init
+    - task: env:validate
+    - task: repoflow:swarm-init
+    - task: repoflow:create-network
+    - task: repoflow:build-all
+    - task: repoflow:getpull-image
+    - task: repoflow:deploy
+    - task: repoflow:waiting
+    - task: repoflow:ls
